@@ -1,12 +1,12 @@
-import { DENSITY_CONFIG } from "./config.js";
+import { DENSITY_CONFIG } from './config.js';
+import type { Density } from '../types/index.js';
 
-export function buildFlashcardPrompt(text, density, language, cardsPerChunk = null) {
-  const targetCount = cardsPerChunk || DENSITY_CONFIG[density];
-
-  const languageInstruction =
-    language === "pt-BR"
-      ? "Gere TODOS os flashcards em PORTUGUÊS (pt-BR)."
-      : `Generate ALL flashcards in ${language}.`;
+export function buildFlashcardPrompt(
+  text: string,
+  density: Density,
+  cardsPerChunk: number | null = null
+): string {
+  const targetCount = cardsPerChunk ?? DENSITY_CONFIG[density];
 
   return `You are an expert at creating flashcards for Anki.
 
@@ -16,7 +16,7 @@ CRITICAL RULES:
 3. One concept per card
 4. Direct, specific questions (no "Explain..." or "Describe...")
 5. Short answers (1-2 sentences max)
-6. ${languageInstruction}
+6. Gere TODOS os flashcards em PORTUGUÊS (pt-BR).
 7. Add 2-4 relevant tags per card
 
 JSON FORMAT (CRITICAL):
