@@ -3,24 +3,6 @@ import { UserRepository } from '../repositories/UserRepository.js';
 import { PlanService } from './PlanService.js';
 import type { Density } from '../types/index.js';
 
-export type GetUserLimitsCommand = { type: 'getUserLimits'; user: IUserDoc };
-export type CanUploadPdfCommand = { type: 'canUploadPdf'; user: IUserDoc };
-export type IsDensityAllowedCommand = {
-  type: 'isDensityAllowed';
-  user: IUserDoc;
-  density: string;
-};
-export type GetAllowedDensitiesCommand = {
-  type: 'getAllowedDensities';
-  user: IUserDoc;
-};
-
-export type UserLimitsCommand =
-  | GetUserLimitsCommand
-  | CanUploadPdfCommand
-  | IsDensityAllowedCommand
-  | GetAllowedDensitiesCommand;
-
 export interface UserLimitsResult {
   plan?: { name: string; displayName: string; features: string[] };
   limits?: {
@@ -35,38 +17,18 @@ export interface UserLimitsResult {
   };
 }
 
-export type UserLimitsServiceResult = UserLimitsResult | boolean | string[];
-
 export class UserLimitsService {
   private readonly userRepository = new UserRepository();
   private readonly planService = new PlanService();
 
-  constructor() {}
-
-  async execute(cmd: UserLimitsCommand): Promise<UserLimitsServiceResult> {
-    switch (cmd.type) {
-      case 'getUserLimits':
-        return this.getUserLimits(cmd.user);
-      case 'canUploadPdf':
-        return this.canUploadPdf(cmd.user);
-      case 'isDensityAllowed':
-        return this.isDensityAllowed(cmd.user, cmd.density);
-      case 'getAllowedDensities':
-        return this.getAllowedDensities(cmd.user);
-    }
-  }
-
-  private async getUserLimits(user: IUserDoc): Promise<UserLimitsResult> {
+  async getUserLimits(user: IUserDoc): Promise<UserLimitsResult> {
     const freshUser =
       (await this.userRepository.ensureMonthlyResetAndGet(
         user._id.toString()
       )) ?? user;
-    const plan = await this.planService.execute({
-      type: 'getPlanByName',
-      planName: user.planType,
-    });
-    if (!plan || Array.isArray(plan)) {
-      throw new Error('Plano não encontrado');
+    const plan = await this.planService.getPlanByName(user.planType);
+    if (!plan) {
+      throw new Error('Plan not found');
     }
     const pdfLimit = plan.limits.pdfsPerMonth;
     const pdfUsed = freshUser.monthlyPdfCount;
@@ -90,35 +52,32 @@ export class UserLimitsService {
     };
   }
 
-  private async canUploadPdf(user: IUserDoc): Promise<boolean> {
-    const freshUser =
-      (await this.userRepository.ensureMonthlyResetAndGet(
-        user._id.toString()
-      )) ?? user;
-    const plan = await this.planService.execute({
-      type: 'getPlanByName',
-      planName: freshUser.planType,
-    });
-    if (!plan || Array.isArray(plan)) return false;
-    return freshUser.monthlyPdfCount < plan.limits.pdfsPerMonth;
+  /** Consumes 1 PDF from the user's quota. Returns false if limit reached. */
+  async tryConsumePdfQuota(user: IUserDoc): Promise<{ consumed: boolean }> {
+    const plan = await this.planService.getPlanByName(user.planType);
+    if (!plan) return { consumed: false };
+    const result = await this.userRepository.tryConsumePdfQuota(
+      user._id.toString(),
+      plan.limits.pdfsPerMonth
+    );
+    return { consumed: result.consumed };
   }
 
-  private async isDensityAllowed(user: IUserDoc, density: string): Promise<boolean> {
-    const plan = await this.planService.execute({
-      type: 'getPlanByName',
-      planName: user.planType,
-    });
-    if (!plan || Array.isArray(plan)) return false;
+  /** Reverts quota consumption (rollback on failure). */
+  async releasePdfQuota(userId: string): Promise<void> {
+    await this.userRepository.releasePdfQuota(userId);
+  }
+
+  async isDensityAllowed(user: IUserDoc, density: string): Promise<boolean> {
+    const plan = await this.planService.getPlanByName(user.planType);
+    if (!plan) return false;
     const normalized = density ? String(density).toLowerCase().trim() : '';
     return plan.limits.allowedDensities.includes(normalized as Density);
   }
 
-  private async getAllowedDensities(user: IUserDoc): Promise<string[]> {
-    const plan = await this.planService.execute({
-      type: 'getPlanByName',
-      planName: user.planType,
-    });
-    if (!plan || Array.isArray(plan)) return ['low'];
+  async getAllowedDensities(user: IUserDoc): Promise<string[]> {
+    const plan = await this.planService.getPlanByName(user.planType);
+    if (!plan) return ['low'];
     return plan.limits.allowedDensities;
   }
 }

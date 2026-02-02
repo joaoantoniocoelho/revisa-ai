@@ -1,24 +1,14 @@
 import { PlanRepository } from '../repositories/PlanRepository.js';
 import type { IPlanDoc } from '../models/Plan.js';
 
-export type GetPlanByNameCommand = { type: 'getPlanByName'; planName: string };
-export type GetAllPlansCommand = { type: 'getAllPlans' };
-
-export type PlanCommand = GetPlanByNameCommand | GetAllPlansCommand;
-
-export type PlanServiceResult = IPlanDoc | IPlanDoc[] | null;
-
 export class PlanService {
   private readonly planRepository = new PlanRepository();
 
-  constructor() {}
+  async getPlanByName(planName: string): Promise<IPlanDoc | null> {
+    return this.planRepository.findOneByNameAndActive(planName);
+  }
 
-  async execute(cmd: PlanCommand): Promise<PlanServiceResult> {
-    switch (cmd.type) {
-      case 'getPlanByName':
-        return this.planRepository.findOneByNameAndActive(cmd.planName);
-      case 'getAllPlans':
-        return this.planRepository.findActive();
-    }
+  async getAllPlans(): Promise<IPlanDoc[]> {
+    return this.planRepository.findActive();
   }
 }

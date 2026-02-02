@@ -9,7 +9,7 @@ export interface IUserDoc {
   planType: PlanType;
   monthlyPdfCount: number;
   lastPdfResetDate: Date;
-  /** Mês da quota atual (YYYY-MM); usado para reset atômico */
+  /** Current quota month (YYYY-MM); used for atomic reset */
   pdfUsageMonth?: string;
   createdAt?: Date;
   updatedAt?: Date;
@@ -19,21 +19,21 @@ const userSchema = new mongoose.Schema<IUserDoc>(
   {
     name: {
       type: String,
-      required: [true, 'Nome é obrigatório'],
+      required: [true, 'Name is required'],
       trim: true,
     },
     email: {
       type: String,
-      required: [true, 'Email é obrigatório'],
+      required: [true, 'Email is required'],
       unique: true,
       lowercase: true,
       trim: true,
-      match: [/^\S+@\S+\.\S+$/, 'Email inválido'],
+      match: [/^\S+@\S+\.\S+$/, 'Invalid email'],
     },
     password: {
       type: String,
-      required: [true, 'Senha é obrigatória'],
-      minlength: [6, 'Senha deve ter no mínimo 6 caracteres'],
+      required: [true, 'Password is required'],
+      minlength: [6, 'Password must be at least 6 characters'],
       select: false,
     },
     planType: {

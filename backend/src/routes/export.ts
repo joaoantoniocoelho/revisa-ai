@@ -9,7 +9,6 @@ export function createExportRouter(): Router {
   const checkPlanLimits = createCheckPlanLimits();
   const router = Router();
 
-  router.post('/', authenticate, checkPlanLimits, exportController.exportCards);
   router.get(
     '/deck/:deckId',
     authenticate,

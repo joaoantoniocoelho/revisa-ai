@@ -9,15 +9,16 @@ import {
   Sparkles, 
   User as UserIcon,
   Crown,
-  Home,
   LogIn
 } from 'lucide-react';
 import { logout } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
+import { useAuthModal } from '@/contexts/AuthModalContext';
 
 export default function Header() {
   const pathname = usePathname();
   const { user, isAuthenticated, getPdfLimit, getPdfUsed } = useUser();
+  const { openLoginModal } = useAuthModal();
 
   const handleLogout = () => {
     logout();
@@ -116,13 +117,14 @@ export default function Header() {
                   </button>
                 </>
               ) : (
-                <Link
-                  href="/login"
+                <button
+                  type="button"
+                  onClick={openLoginModal}
                   className="px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg font-semibold hover:shadow-lg transition-all flex items-center gap-2"
                 >
                   <LogIn className="w-4 h-4" />
                   Entrar
-                </Link>
+                </button>
               )}
             </div>
           </div>
@@ -166,13 +168,14 @@ export default function Header() {
                   )}
                 </>
               ) : (
-                <Link
-                  href="/login"
+                <button
+                  type="button"
+                  onClick={openLoginModal}
                   className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg font-semibold text-xs flex items-center gap-1"
                 >
                   <LogIn className="w-3 h-3" />
                   Entrar
-                </Link>
+                </button>
               )}
             </div>
           </div>

@@ -4,7 +4,7 @@ import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { DeckController } from '../controllers/DeckController.js';
-import { UserRepository } from '../repositories/UserRepository.js';
+import { UserLimitsService } from '../services/UserLimitsService.js';
 import { createAuthenticate } from '../middlewares/auth.js';
 import {
   createCheckPdfLimit,
@@ -55,7 +55,7 @@ export function createDecksRouter(): Router {
   router.patch('/:deckId', authenticate, deckController.updateDeck);
   router.delete('/:deckId', authenticate, deckController.deleteDeck);
 
-  const userRepository = new UserRepository();
+  const limitsService = new UserLimitsService();
   router.use(
     async (
       error: unknown,
@@ -65,9 +65,9 @@ export function createDecksRouter(): Router {
     ): Promise<void> => {
       if (req.pdfQuotaConsumed && req.user?._id) {
         try {
-          await userRepository.releasePdfQuota(req.user._id.toString());
+          await limitsService.releasePdfQuota(req.user._id.toString());
         } catch {
-          /* ignorar */
+          /* ignore */
         }
       }
       if (error instanceof multer.MulterError) {

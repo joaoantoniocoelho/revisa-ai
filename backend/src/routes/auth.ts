@@ -9,16 +9,16 @@ export function createAuthRouter(): Router {
   const router = Router();
 
   const signupValidation = [
-    body('name').trim().notEmpty().withMessage('Nome é obrigatório'),
-    body('email').isEmail().withMessage('Email inválido'),
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('email').isEmail().withMessage('Invalid email'),
     body('password')
       .isLength({ min: 6 })
-      .withMessage('Senha deve ter no mínimo 6 caracteres'),
+      .withMessage('Password must be at least 6 characters'),
   ];
 
   const loginValidation = [
-    body('email').isEmail().withMessage('Email inválido'),
-    body('password').notEmpty().withMessage('Senha é obrigatória'),
+    body('email').isEmail().withMessage('Invalid email'),
+    body('password').notEmpty().withMessage('Password is required'),
   ];
 
   router.post('/signup', signupValidation, authController.signup);

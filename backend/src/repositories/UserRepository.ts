@@ -45,21 +45,14 @@ export class UserRepository {
   }
 
   /**
-   * Reset mensal atômico: reseta o contador quando muda o mês.
-   * Uma única operação findOneAndUpdate.
+   * Atomic monthly reset: resets the counter when the month changes.
+   * Single findOneAndUpdate operation.
    */
   async ensureMonthlyResetAndGet(userId: string): Promise<IUserDoc | null> {
     const currentMonth = this.getCurrentMonth();
     const now = new Date();
     const updated = await UserModel.findOneAndUpdate(
-      {
-        _id: userId,
-        $or: [
-          { pdfUsageMonth: { $ne: currentMonth } },
-          { pdfUsageMonth: { $exists: false } },
-          { pdfUsageMonth: null },
-        ],
-      },
+      { _id: userId, pdfUsageMonth: { $ne: currentMonth } },
       {
         $set: {
           pdfUsageMonth: currentMonth,
@@ -74,25 +67,13 @@ export class UserRepository {
     return user ? (user as unknown as IUserDoc) : null;
   }
 
-  /**
-   * Consome uma unidade de quota de PDF de forma atômica.
-   * Reset mensal (se necessário) e incremento em operações atômicas sequenciais.
-   * @returns { consumed: true, newCount } em sucesso, { consumed: false } se limite atingido
-   */
   async tryConsumePdfQuota(
     userId: string,
     planLimit: number
   ): Promise<{ consumed: boolean; newCount?: number }> {
     const currentMonth = this.getCurrentMonth();
     await UserModel.findOneAndUpdate(
-      {
-        _id: userId,
-        $or: [
-          { pdfUsageMonth: { $ne: currentMonth } },
-          { pdfUsageMonth: { $exists: false } },
-          { pdfUsageMonth: null },
-        ],
-      },
+      { _id: userId, pdfUsageMonth: { $ne: currentMonth } },
       {
         $set: {
           pdfUsageMonth: currentMonth,
@@ -112,10 +93,6 @@ export class UserRepository {
     return { consumed: true, newCount: updated.monthlyPdfCount };
   }
 
-  /**
-   * Reverte o consumo de quota (rollback em caso de falha no processamento).
-   * Seguro e idempotente: só decrementa se monthlyPdfCount > 0.
-   */
   async releasePdfQuota(userId: string): Promise<void> {
     await UserModel.findOneAndUpdate(
       { _id: userId, monthlyPdfCount: { $gt: 0 } },

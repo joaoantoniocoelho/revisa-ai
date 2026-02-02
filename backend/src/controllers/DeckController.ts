@@ -1,11 +1,11 @@
 import type { Request, Response } from 'express';
 import { DeckService } from '../services/DeckService.js';
-import { UserRepository } from '../repositories/UserRepository.js';
+import { UserLimitsService } from '../services/UserLimitsService.js';
 import type { Density } from '../types/index.js';
 
 export class DeckController {
   private readonly deckService = new DeckService();
-  private readonly userRepository = new UserRepository();
+  private readonly limitsService = new UserLimitsService();
 
   constructor() {}
 
@@ -15,7 +15,7 @@ export class DeckController {
       const density = (req.body?.density ?? 'medium') as string;
       const user = req.user;
       if (!user) {
-        res.status(401).json({ error: 'Não autorizado' });
+        res.status(401).json({ error: 'Unauthorized' });
         return;
       }
       if (!pdfFile || !('path' in pdfFile)) {
@@ -26,18 +26,14 @@ export class DeckController {
         res.status(400).json({ error: 'Invalid density value' });
         return;
       }
-      const result = await this.deckService.execute({
-        type: 'generateDeck',
-        userId: user._id,
-        pdfFile: {
-          path: pdfFile.path,
-          originalname: pdfFile.originalname,
-        },
-        density: density as Density,
-      });
+      const result = await this.deckService.generateFromPdf(
+        user._id,
+        { path: pdfFile.path, originalname: pdfFile.originalname },
+        density as Density
+      );
       if (result && 'deck' in result && 'cards' in result && 'meta' in result) {
         res.json({
-          message: 'Flashcards gerados com sucesso',
+          message: 'Flashcards generated successfully',
           deckId: result.deck._id,
           cards: result.cards,
           meta: result.meta,
@@ -46,7 +42,7 @@ export class DeckController {
     } catch (error) {
       if (req.pdfQuotaConsumed && req.user?._id) {
         try {
-          await this.userRepository.releasePdfQuota(req.user._id.toString());
+          await this.limitsService.releasePdfQuota(req.user._id.toString());
         } catch (releaseErr) {
           console.error('Failed to release PDF quota:', releaseErr);
         }
@@ -62,17 +58,12 @@ export class DeckController {
     try {
       const user = req.user;
       if (!user) {
-        res.status(401).json({ error: 'Não autorizado' });
+        res.status(401).json({ error: 'Unauthorized' });
         return;
       }
       const limit = parseInt(String(req.query.limit), 10) || 50;
       const skip = parseInt(String(req.query.skip), 10) || 0;
-      const result = await this.deckService.execute({
-        type: 'getUserDecks',
-        userId: user._id,
-        limit,
-        skip,
-      });
+      const result = await this.deckService.getUserDecks(user._id, limit, skip);
       res.json(result);
     } catch (error) {
       console.error('Error in getDecks:', error);
@@ -87,14 +78,10 @@ export class DeckController {
       const { deckId } = req.params;
       const user = req.user;
       if (!user) {
-        res.status(401).json({ error: 'Não autorizado' });
+        res.status(401).json({ error: 'Unauthorized' });
         return;
       }
-      const deck = await this.deckService.execute({
-        type: 'getDeck',
-        deckId,
-        userId: user._id,
-      });
+      const deck = await this.deckService.getDeckById(deckId, user._id);
       res.json({ deck });
     } catch (error) {
       console.error('Error in getDeck:', error);
@@ -102,7 +89,7 @@ export class DeckController {
         error:
           error instanceof Error
             ? error.message
-            : 'Deck não encontrado ou sem permissão',
+            : 'Deck not found or access denied',
       });
     }
   };
@@ -112,22 +99,18 @@ export class DeckController {
       const { deckId } = req.params;
       const user = req.user;
       if (!user) {
-        res.status(401).json({ error: 'Não autorizado' });
+        res.status(401).json({ error: 'Unauthorized' });
         return;
       }
-      await this.deckService.execute({
-        type: 'deleteDeck',
-        deckId,
-        userId: user._id,
-      });
-      res.json({ message: 'Deck deletado com sucesso' });
+      await this.deckService.deleteDeck(deckId, user._id);
+      res.json({ message: 'Deck deleted successfully' });
     } catch (error) {
       console.error('Error in deleteDeck:', error);
       res.status(404).json({
         error:
           error instanceof Error
             ? error.message
-            : 'Deck não encontrado ou sem permissão',
+            : 'Deck not found or access denied',
       });
     }
   };
@@ -138,32 +121,27 @@ export class DeckController {
       const { name } = req.body as { name?: string };
       const user = req.user;
       if (!user) {
-        res.status(401).json({ error: 'Não autorizado' });
+        res.status(401).json({ error: 'Unauthorized' });
         return;
       }
       if (!name) {
-        res.status(400).json({ error: 'Nome é obrigatório' });
+        res.status(400).json({ error: 'Name is required' });
         return;
       }
-      const deck = await this.deckService.execute({
-        type: 'updateDeck',
-        deckId,
-        userId: user._id,
-        name,
-      });
+      const deck = await this.deckService.updateDeckName(deckId, user._id, name);
       res.json({
-        message: 'Deck atualizado com sucesso',
+        message: 'Deck updated successfully',
         deck,
       });
     } catch (error) {
       console.error('Error in updateDeck:', error);
       const statusCode =
-        error instanceof Error && error.message.includes('não encontrado')
+        error instanceof Error && error.message.includes('not found')
           ? 404
           : 400;
       res.status(statusCode).json({
         error:
-          error instanceof Error ? error.message : 'Erro ao atualizar deck',
+          error instanceof Error ? error.message : 'Error updating deck',
       });
     }
   };

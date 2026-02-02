@@ -6,7 +6,7 @@ declare global {
     interface Request {
       user?: IUserDoc;
       userLimits?: UserLimitsResult;
-      /** Indica que a quota de PDF foi consumida atomicamente; usado para rollback em falha */
+      /** Indicates that PDF quota was consumed atomically; used for rollback on failure */
       pdfQuotaConsumed?: boolean;
     }
   }

@@ -12,7 +12,7 @@ export class AuthController {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         res.status(400).json({
-          error: 'Dados inválidos',
+          error: 'Invalid data',
           details: errors.array(),
         });
         return;
@@ -22,20 +22,19 @@ export class AuthController {
         email?: string;
         password?: string;
       };
-      const result = await this.authService.execute({
-        type: 'signup',
+      const result = await this.authService.signup({
         name: name!,
         email: email!,
         password: password!,
       });
       res.status(201).json({
-        message: 'Usuário criado com sucesso',
+        message: 'User created successfully',
         ...result,
       });
     } catch (error) {
       console.error('Signup error:', error);
       res.status(400).json({
-        error: error instanceof Error ? error.message : 'Erro ao cadastrar',
+        error: error instanceof Error ? error.message : 'Signup failed',
       });
     }
   };
@@ -45,25 +44,24 @@ export class AuthController {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         res.status(400).json({
-          error: 'Dados inválidos',
+          error: 'Invalid data',
           details: errors.array(),
         });
         return;
       }
       const { email, password } = req.body as { email?: string; password?: string };
-      const result = await this.authService.execute({
-        type: 'login',
+      const result = await this.authService.login({
         email: email!,
         password: password!,
       });
       res.status(200).json({
-        message: 'Login realizado com sucesso',
+        message: 'Login successful',
         ...result,
       });
     } catch (error) {
       console.error('Login error:', error);
       res.status(401).json({
-        error: error instanceof Error ? error.message : 'Credenciais inválidas',
+        error: error instanceof Error ? error.message : 'Invalid credentials',
       });
     }
   };
@@ -71,18 +69,15 @@ export class AuthController {
   getProfile = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
-        res.status(401).json({ error: 'Não autorizado' });
+        res.status(401).json({ error: 'Unauthorized' });
         return;
       }
-      const result = await this.authService.execute({
-        type: 'getProfile',
-        userId: req.user._id.toString(),
-      });
+      const result = await this.authService.getProfile(req.user._id.toString());
       res.status(200).json({ user: result.user });
     } catch (error) {
       console.error('Get profile error:', error);
       res.status(404).json({
-        error: error instanceof Error ? error.message : 'Usuário não encontrado',
+        error: error instanceof Error ? error.message : 'User not found',
       });
     }
   };

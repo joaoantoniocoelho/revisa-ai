@@ -1,56 +1,29 @@
 import fs from 'fs';
 import type { Request, Response, NextFunction } from 'express';
 import { UserLimitsService } from '../services/UserLimitsService.js';
-import { UserRepository } from '../repositories/UserRepository.js';
-import { PlanService } from '../services/PlanService.js';
 
-/**
- * Consome quota de PDF de forma atômica ANTES de qualquer upload.
- * Se o processamento falhar depois, o controller deve chamar releasePdfQuota.
- */
+const limitsService = new UserLimitsService();
+
+function requireUser(req: Request, res: Response): boolean {
+  if (!req.user) {
+    res.status(401).json({ error: 'User not authenticated' });
+    return false;
+  }
+  return true;
+}
+
 export function createCheckPdfLimit() {
-  const userLimitsService = new UserLimitsService();
-  const userRepository = new UserRepository();
-  const planService = new PlanService();
-
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const user = req.user;
-      if (!user) {
-        res.status(401).json({ error: 'Usuário não autenticado' });
-        return;
-      }
-      const plan = await planService.execute({
-        type: 'getPlanByName',
-        planName: user.planType,
-      });
-      if (!plan || Array.isArray(plan)) {
-        res.status(500).json({ error: 'Plano não encontrado' });
-        return;
-      }
-      const planLimit = plan.limits.pdfsPerMonth;
-      const result = await userRepository.tryConsumePdfQuota(
-        user._id.toString(),
-        planLimit
-      );
-      if (!result.consumed) {
-        const limits = await userLimitsService.execute({
-          type: 'getUserLimits',
-          user,
-        });
-        const lim = limits as {
-          limits?: { pdfsPerMonth: number };
-          usage?: { pdfUsed: number };
-        };
+      if (!requireUser(req, res)) return;
+      const { consumed } = await limitsService.tryConsumePdfQuota(req.user!);
+      if (!consumed) {
         res.status(403).json({
-          error: 'Limite mensal de PDFs atingido',
-          limit: lim.limits?.pdfsPerMonth,
-          used: lim.usage?.pdfUsed,
-          planType: user.planType,
+          error: 'Monthly PDF limit reached',
           message:
-            user.planType === 'free'
-              ? 'Faça upgrade para o plano pago para enviar mais PDFs'
-              : 'Você atingiu o limite mensal do seu plano',
+            req.user!.planType === 'free'
+              ? 'Upgrade to a paid plan to upload more PDFs'
+              : 'You have reached your plan\'s monthly limit',
         });
         return;
       }
@@ -58,86 +31,65 @@ export function createCheckPdfLimit() {
       next();
     } catch (error) {
       console.error('Check PDF limit error:', error);
-      res.status(500).json({ error: 'Erro ao verificar limite' });
+      res.status(500).json({ error: 'Error checking limit' });
     }
   };
 }
 
 export function createCheckDensityAccess() {
-  const userLimitsService = new UserLimitsService();
-  const userRepository = new UserRepository();
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const user = req.user;
-      if (!user) {
-        res.status(401).json({ error: 'Usuário não autenticado' });
+      if (!requireUser(req, res)) return;
+      const density = req.body?.density
+        ? String(req.body.density).toLowerCase().trim()
+        : undefined;
+      if (density !== undefined) (req.body as { density?: string }).density = density;
+
+      const allowed = await limitsService.isDensityAllowed(req.user!, density ?? '');
+      if (allowed) {
+        next();
         return;
       }
-      let density = req.body?.density as string | undefined;
-      if (density) {
-        density = String(density).toLowerCase().trim();
-        (req.body as { density?: string }).density = density;
+
+      if (req.pdfQuotaConsumed) {
+        try {
+          await limitsService.releasePdfQuota(req.user!._id.toString());
+        } catch {
+          /* ignore */
+        }
       }
-      const isAllowed = await userLimitsService.execute({
-        type: 'isDensityAllowed',
-        user,
-        density: density ?? '',
+      const file = req.file as { path?: string } | undefined;
+      if (file?.path) {
+        try {
+          await fs.promises.unlink(file.path);
+        } catch {
+          /* ignore */
+        }
+      }
+      const allowedDensities = await limitsService.getAllowedDensities(req.user!);
+      res.status(403).json({
+        error: 'Density not allowed for your plan',
+        allowedDensities,
+        requestedDensity: density,
+        planType: req.user!.planType,
+        message: 'Upgrade to a paid plan to access all densities',
       });
-      if (!isAllowed) {
-        if (req.pdfQuotaConsumed) {
-          try {
-            await userRepository.releasePdfQuota(user._id.toString());
-          } catch {
-            /* ignorar erro ao liberar */
-          }
-        }
-        const file = req.file as { path?: string } | undefined;
-        if (file?.path) {
-          try {
-            await fs.promises.unlink(file.path);
-          } catch {
-            /* ignorar */
-          }
-        }
-        const allowedDensities = await userLimitsService.execute({
-          type: 'getAllowedDensities',
-          user,
-        });
-        res.status(403).json({
-          error: 'Densidade não permitida para seu plano',
-          allowedDensities,
-          requestedDensity: density,
-          planType: user.planType,
-          message: 'Faça upgrade para o plano pago para acessar todas as densidades',
-        });
-        return;
-      }
-      next();
     } catch (error) {
       console.error('Check density access error:', error);
-      res.status(500).json({ error: 'Erro ao verificar acesso' });
+      res.status(500).json({ error: 'Error checking access' });
     }
   };
 }
 
 export function createCheckPlanLimits() {
-  const userLimitsService = new UserLimitsService();
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const user = req.user;
-      if (!user) {
-        res.status(401).json({ error: 'Usuário não autenticado' });
-        return;
-      }
-      const limits = await userLimitsService.execute({
-        type: 'getUserLimits',
-        user,
-      });
-      req.userLimits = limits as typeof req.userLimits;
+      if (!requireUser(req, res)) return;
+      req.userLimits = await limitsService.getUserLimits(req.user!);
       next();
     } catch (error) {
       console.error('Check plan limits error:', error);
-      res.status(500).json({ error: 'Erro ao verificar limites do plano' });
+      res.status(500).json({ error: 'Error checking plan limits' });
     }
   };
 }

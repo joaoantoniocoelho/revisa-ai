@@ -38,9 +38,9 @@ function tryParsePartialJson(text: string): { cards: PartialCard[] } {
     }
   }
   if (cards.length === 0) {
-    throw new Error('Não foi possível recuperar nenhum flashcard. Tente novamente.');
+    throw new Error('Could not recover any flashcards. Please try again.');
   }
-  console.log(`Recuperados ${cards.length} cards de JSON parcial`);
+  console.log(`Recovered ${cards.length} cards from partial JSON`);
   return { cards };
 }
 
@@ -92,16 +92,16 @@ export async function generateFlashcards(
         try {
           parsed = JSON.parse(jsonMatch[0]) as { cards?: PartialCard[] };
         } catch {
-          console.log('Tentando recuperar cards parciais...');
+          console.log('Attempting to recover partial cards...');
           parsed = tryParsePartialJson(responseText);
         }
       } else {
-        throw new Error('Resposta inválida do Gemini. Tente novamente.');
+        throw new Error('Invalid response from Gemini. Please try again.');
       }
     }
 
     if (!parsed.cards || !Array.isArray(parsed.cards)) {
-      throw new Error('Formato de resposta inválido do Gemini. Tente novamente.');
+      throw new Error('Invalid response format from Gemini. Please try again.');
     }
 
     const cleanedCards: FlashcardEntity[] = parsed.cards
@@ -115,8 +115,8 @@ export async function generateFlashcards(
     return cleanedCards;
   } catch (error: unknown) {
     const err = error as { message?: string; status?: number };
-    if (err?.message?.includes('processar a resposta') && retryCount < 2) {
-      console.log(`Retry ${retryCount + 1}/2 para recuperar cards...`);
+    if (err?.message?.includes('recover') && retryCount < 2) {
+      console.log(`Retry ${retryCount + 1}/2 to recover cards...`);
       await new Promise((resolve) => setTimeout(resolve, 1000));
       return generateFlashcards(text, density, apiKey, cardsPerChunk, retryCount + 1);
     }
@@ -126,7 +126,7 @@ export async function generateFlashcards(
       err?.status === 400
     ) {
       throw new Error(
-        'API Key inválida. Verifique se copiou corretamente de https://aistudio.google.com/app/apikey'
+        'Invalid API key. Check that you copied it correctly from https://aistudio.google.com/app/apikey'
       );
     }
     if (
@@ -135,15 +135,15 @@ export async function generateFlashcards(
       err?.status === 429
     ) {
       throw new Error(
-        'Limite de uso da API atingido. Aguarde alguns minutos ou verifique sua cota no Google AI Studio.'
+        'API usage limit reached. Wait a few minutes or check your quota at Google AI Studio.'
       );
     }
     if (err?.status === 403) {
-      throw new Error('Permissão negada. Verifique se a API key tem acesso ao Gemini API.');
+      throw new Error('Permission denied. Check that the API key has access to the Gemini API.');
     }
     if (error instanceof Error) {
       throw new Error(`Gemini API error: ${error.message}`);
     }
-    throw new Error('Erro desconhecido ao gerar flashcards');
+    throw new Error('Unknown error generating flashcards');
   }
 }

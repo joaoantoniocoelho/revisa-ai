@@ -1,7 +1,7 @@
-/** Nível de densidade na geração de flashcards */
+/** Flashcard generation density level */
 export type Density = 'low' | 'medium' | 'high';
 
-/** Tipo de plano do usuário */
+/** User plan type */
 export type PlanType = 'free' | 'paid';
 
 /** Flashcard */
@@ -11,7 +11,7 @@ export interface FlashcardEntity {
   tags?: string[];
 }
 
-/** Metadados do deck */
+/** Deck metadata */
 export interface DeckMetadata {
   chunks: number;
   model: string;
@@ -21,7 +21,7 @@ export interface DeckMetadata {
   finalCount: number;
 }
 
-/** Plano (limites e features) */
+/** Plan (limits and features) */
 export interface PlanEntity {
   name: string;
   displayName: string;

@@ -13,46 +13,6 @@ import {
   validatePdfText,
 } from '../utils/validation.js';
 
-export type GenerateDeckCommand = {
-  type: 'generateDeck';
-  userId: Types.ObjectId;
-  pdfFile: { path: string; originalname: string };
-  density: Density;
-};
-
-export type GetUserDecksCommand = {
-  type: 'getUserDecks';
-  userId: Types.ObjectId;
-  limit?: number;
-  skip?: number;
-};
-
-export type GetDeckCommand = {
-  type: 'getDeck';
-  deckId: string;
-  userId: Types.ObjectId;
-};
-
-export type DeleteDeckCommand = {
-  type: 'deleteDeck';
-  deckId: string;
-  userId: Types.ObjectId;
-};
-
-export type UpdateDeckCommand = {
-  type: 'updateDeck';
-  deckId: string;
-  userId: Types.ObjectId;
-  name: string;
-};
-
-export type DeckCommand =
-  | GenerateDeckCommand
-  | GetUserDecksCommand
-  | GetDeckCommand
-  | DeleteDeckCommand
-  | UpdateDeckCommand;
-
 export interface GenerateDeckResult {
   deck: IDeckDoc;
   cards: FlashcardEntity[];
@@ -74,60 +34,85 @@ export interface GetUserDecksResult {
   skip: number;
 }
 
-export type DeckServiceResult =
-  | GenerateDeckResult
-  | GetUserDecksResult
-  | IDeckDoc
-  | void;
-
 export class DeckService {
   private readonly deckRepository = new DeckRepository();
 
-  constructor() {}
-
-  async execute(cmd: DeckCommand): Promise<DeckServiceResult> {
-    switch (cmd.type) {
-      case 'generateDeck':
-        return this.generateFromPdf(cmd);
-      case 'getUserDecks':
-        return this.getUserDecks(cmd);
-      case 'getDeck':
-        return this.getDeckById(cmd);
-      case 'deleteDeck':
-        return this.deleteDeck(cmd);
-      case 'updateDeck':
-        return this.updateDeckName(cmd);
-    }
-  }
-
-  private async generateFromPdf(
-    cmd: GenerateDeckCommand
+  async generateFromPdf(
+    userId: Types.ObjectId,
+    pdfFile: { path: string; originalname: string },
+    density: Density
   ): Promise<GenerateDeckResult> {
-    const filePath = cmd.pdfFile.path;
     let buffer: Buffer;
     try {
-      buffer = await fs.promises.readFile(filePath);
+      buffer = await fs.promises.readFile(pdfFile.path);
     } catch {
-      throw new Error('Falha ao ler o arquivo PDF');
+      throw new Error('Failed to read PDF file');
     }
     try {
-      return await this.processPdfBuffer(cmd, buffer);
+      return await this.processPdfBuffer(userId, pdfFile, density, buffer);
     } finally {
       try {
-        await fs.promises.unlink(filePath);
+        await fs.promises.unlink(pdfFile.path);
       } catch {
-        /* ignorar erro ao remover temp */
+        /* ignore temp file removal error */
       }
     }
   }
 
+  async getUserDecks(
+    userId: Types.ObjectId,
+    limit = 50,
+    skip = 0
+  ): Promise<GetUserDecksResult> {
+    const decks = await this.deckRepository.findByUserId(userId, limit, skip);
+    const total = await this.deckRepository.countByUserId(userId);
+    return { decks, total, limit, skip };
+  }
+
+  async getDeckById(deckId: string, userId: Types.ObjectId): Promise<IDeckDoc> {
+    const deck = await this.deckRepository.findByIdAndUserId(deckId, userId);
+    if (!deck) {
+      throw new Error('Deck not found');
+    }
+    return deck;
+  }
+
+  async deleteDeck(deckId: string, userId: Types.ObjectId): Promise<IDeckDoc> {
+    const deck = await this.deckRepository.delete(deckId, userId);
+    if (!deck) {
+      throw new Error('Deck not found');
+    }
+    return deck;
+  }
+
+  async updateDeckName(
+    deckId: string,
+    userId: Types.ObjectId,
+    name: string
+  ): Promise<IDeckDoc> {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      throw new Error('Deck name cannot be empty');
+    }
+    if (trimmed.length > 200) {
+      throw new Error('Deck name cannot exceed 200 characters');
+    }
+    const deck = await this.deckRepository.updateName(deckId, userId, trimmed);
+    if (!deck) {
+      throw new Error('Deck not found');
+    }
+    return deck;
+  }
+
   private async processPdfBuffer(
-    cmd: GenerateDeckCommand,
+    userId: Types.ObjectId,
+    pdfFile: { path: string; originalname: string },
+    density: Density,
     buffer: Buffer
   ): Promise<GenerateDeckResult> {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey?.trim()) {
-      throw new Error('GEMINI_API_KEY não configurada no servidor');
+      throw new Error('GEMINI_API_KEY is not configured on the server');
     }
     const pdf = await import('pdf-parse');
     const data = await pdf.default(buffer);
@@ -135,7 +120,7 @@ export class DeckService {
 
     if (text.length > PDF_LIMITS.MAX_TEXT_LENGTH) {
       throw new Error(
-        `PDF muito grande. Máximo permitido: ${(PDF_LIMITS.MAX_TEXT_LENGTH / 1000).toFixed(0)}k caracteres de texto.`
+        `PDF too large. Maximum allowed: ${(PDF_LIMITS.MAX_TEXT_LENGTH / 1000).toFixed(0)}k characters of text.`
       );
     }
 
@@ -160,7 +145,7 @@ export class DeckService {
     if (chunks.length > PDF_LIMITS.MAX_CHUNKS_PER_PDF) {
       chunks = chunks.slice(0, PDF_LIMITS.MAX_CHUNKS_PER_PDF);
     }
-    const targetCount = DENSITY_CONFIG[cmd.density];
+    const targetCount = DENSITY_CONFIG[density];
     let cardsPerChunk: number;
     if (chunks.length > 10) {
       cardsPerChunk = Math.max(8, Math.ceil((targetCount * 1.5) / chunks.length));
@@ -172,10 +157,10 @@ export class DeckService {
     }
 
     console.log(
-      `📄 PDF: ${(textLength / 1000).toFixed(1)}k caracteres | ${chunks.length} chunks (${chunkSize} chars/chunk)`
+      `📄 PDF: ${(textLength / 1000).toFixed(1)}k characters | ${chunks.length} chunks (${chunkSize} chars/chunk)`
     );
     console.log(
-      `🎯 Meta: ${targetCount} cards | ${cardsPerChunk} cards/chunk | Paralelismo: ${maxConcurrent}`
+      `🎯 Target: ${targetCount} cards | ${cardsPerChunk} cards/chunk | Concurrency: ${maxConcurrent}`
     );
 
     const allCards: FlashcardEntity[] = [];
@@ -184,18 +169,18 @@ export class DeckService {
       const batchPromises = chunkBatch.map(async (chunk, index) => {
         try {
           const chunkNum = i + index + 1;
-          console.log(`[${chunkNum}/${chunks.length}] Gerando flashcards...`);
+          console.log(`[${chunkNum}/${chunks.length}] Generating flashcards...`);
           const cards = await generateFlashcards(
             chunk,
-            cmd.density,
+            density,
             apiKey,
             cardsPerChunk
           );
-          console.log(`[${chunkNum}/${chunks.length}] ✓ ${cards.length} cards gerados`);
+          console.log(`[${chunkNum}/${chunks.length}] ✓ ${cards.length} cards generated`);
           return cards;
         } catch (error) {
           console.error(
-            `[${i + index + 1}/${chunks.length}] ✗ Erro:`,
+            `[${i + index + 1}/${chunks.length}] ✗ Error:`,
             error instanceof Error ? error.message : error
           );
           return [];
@@ -206,7 +191,7 @@ export class DeckService {
     }
 
     console.log(
-      `Total de ${allCards.length} cards gerados de ${chunks.length} chunks`
+      `Total of ${allCards.length} cards generated from ${chunks.length} chunks`
     );
     if (allCards.length === 0) {
       throw new Error('Failed to generate any flashcards. Check your API key.');
@@ -214,15 +199,15 @@ export class DeckService {
 
     const validatedCards = validateCards(allCards);
     const uniqueCards = dedupeCards(validatedCards);
-    const maxCards = Math.ceil(DENSITY_CONFIG[cmd.density] * 1.2);
+    const maxCards = Math.ceil(DENSITY_CONFIG[density] * 1.2);
     const limitedCards = uniqueCards.slice(0, maxCards);
 
     const deck = await this.deckRepository.create({
-      userId: cmd.userId,
-      name: cmd.pdfFile.originalname.replace('.pdf', ''),
-      pdfFileName: cmd.pdfFile.originalname,
+      userId,
+      name: pdfFile.originalname.replace('.pdf', ''),
+      pdfFileName: pdfFile.originalname,
       cards: limitedCards,
-      density: cmd.density,
+      density,
       metadata: {
         chunks: chunks.length,
         model: GEMINI_MODEL,
@@ -243,58 +228,8 @@ export class DeckService {
         totalGenerated: allCards.length,
         afterDeduplication: uniqueCards.length,
         finalCount: limitedCards.length,
-        densityTarget: DENSITY_CONFIG[cmd.density],
+        densityTarget: DENSITY_CONFIG[density],
       },
     };
-  }
-
-  private async getUserDecks(cmd: GetUserDecksCommand): Promise<GetUserDecksResult> {
-    const limit = cmd.limit ?? 50;
-    const skip = cmd.skip ?? 0;
-    const decks = await this.deckRepository.findByUserId(
-      cmd.userId,
-      limit,
-      skip
-    );
-    const total = await this.deckRepository.countByUserId(cmd.userId);
-    return { decks, total, limit, skip };
-  }
-
-  private async getDeckById(cmd: GetDeckCommand): Promise<IDeckDoc> {
-    const deck = await this.deckRepository.findByIdAndUserId(
-      cmd.deckId,
-      cmd.userId
-    );
-    if (!deck) {
-      throw new Error('Deck não encontrado');
-    }
-    return deck;
-  }
-
-  private async deleteDeck(cmd: DeleteDeckCommand): Promise<IDeckDoc> {
-    const deck = await this.deckRepository.delete(cmd.deckId, cmd.userId);
-    if (!deck) {
-      throw new Error('Deck não encontrado');
-    }
-    return deck;
-  }
-
-  private async updateDeckName(cmd: UpdateDeckCommand): Promise<IDeckDoc> {
-    const name = cmd.name.trim();
-    if (!name) {
-      throw new Error('Nome do deck não pode ser vazio');
-    }
-    if (name.length > 200) {
-      throw new Error('Nome do deck não pode ter mais de 200 caracteres');
-    }
-    const deck = await this.deckRepository.updateName(
-      cmd.deckId,
-      cmd.userId,
-      name
-    );
-    if (!deck) {
-      throw new Error('Deck não encontrado');
-    }
-    return deck;
   }
 }

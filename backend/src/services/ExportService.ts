@@ -2,20 +2,6 @@ import type { Types } from 'mongoose';
 import type { FlashcardEntity } from '../types/index.js';
 import { DeckRepository } from '../repositories/DeckRepository.js';
 
-export type ExportCardsCommand = {
-  type: 'exportCards';
-  cards: FlashcardEntity[];
-  deckName?: string;
-};
-
-export type ExportDeckCommand = {
-  type: 'exportDeck';
-  deckId: string;
-  userId: Types.ObjectId;
-};
-
-export type ExportCommand = ExportCardsCommand | ExportDeckCommand;
-
 export interface ExportResult {
   buffer: Buffer;
   filename: string;
@@ -24,15 +10,8 @@ export interface ExportResult {
 export class ExportService {
   private readonly deckRepository = new DeckRepository();
 
-  constructor() {}
-
-  async execute(cmd: ExportCommand): Promise<ExportResult> {
-    switch (cmd.type) {
-      case 'exportCards':
-        return this.exportToAnki(cmd.cards, cmd.deckName ?? 'PDF2Anki Import');
-      case 'exportDeck':
-        return this.exportDeckById(cmd.deckId, cmd.userId);
-    }
+  async exportDeck(deckId: string, userId: Types.ObjectId): Promise<ExportResult> {
+    return this.exportDeckById(deckId, userId);
   }
 
   private async exportToAnki(
@@ -69,7 +48,7 @@ export class ExportService {
     const deck = await this.deckRepository.findByIdAndUserId(deckId, userId);
     if (!deck) {
       throw new Error(
-        'Deck não encontrado ou você não tem permissão para acessá-lo'
+        'Deck not found or you do not have permission to access it'
       );
     }
     return this.exportToAnki(deck.cards, deck.name);

@@ -1,5 +1,5 @@
 /**
- * Divide texto em chunks de tamanho apropriado para o Gemini
+ * Split text into chunks of appropriate size for Gemini.
  */
 export function chunkText(text: string, maxChunkSize = 6000): string[] {
   const cleanText = text.replace(/\s+/g, ' ').trim();

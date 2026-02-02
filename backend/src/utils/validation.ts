@@ -1,7 +1,7 @@
 import type { FlashcardEntity } from '../types/index.js';
 
 /**
- * Remove cards duplicados baseado no campo "front"
+ * Remove duplicate cards based on the "front" field.
  */
 export function dedupeCards(cards: FlashcardEntity[]): FlashcardEntity[] {
   const seen = new Set<string>();
@@ -17,7 +17,7 @@ export function dedupeCards(cards: FlashcardEntity[]): FlashcardEntity[] {
 }
 
 /**
- * Valida e limpa flashcards
+ * Validate and clean flashcards.
  */
 export function validateCards(
   cards: Array<{ front?: string; back?: string; tags?: string[] }>
@@ -42,21 +42,21 @@ export interface ValidatePdfTextResult {
 }
 
 /**
- * Valida se o texto extraído do PDF é suficiente
+ * Validate that the extracted PDF text is sufficient.
  */
 export function validatePdfText(text: string): ValidatePdfTextResult {
   const cleanText = text.trim();
   if (cleanText.length < 800) {
     return {
       valid: false,
-      error: 'PDF escaneado ou com texto insuficiente. Mínimo: 800 caracteres.',
+      error: 'Scanned PDF or insufficient text. Minimum: 800 characters.',
     };
   }
   const alphanumericRatio = (cleanText.match(/[a-zA-Z0-9]/g) ?? []).length / cleanText.length;
   if (alphanumericRatio < 0.5) {
     return {
       valid: false,
-      error: 'PDF contém pouco texto legível. Pode ser um PDF escaneado.',
+      error: 'PDF contains little readable text. It may be a scanned PDF.',
     };
   }
   return { valid: true };

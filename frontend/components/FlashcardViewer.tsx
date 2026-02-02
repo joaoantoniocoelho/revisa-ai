@@ -25,6 +25,7 @@ interface FlashcardViewerProps {
   deckName?: string;
   onExport?: () => void;
   exporting?: boolean;
+  exportDisabled?: boolean;
 }
 
 export default function FlashcardViewer({
@@ -32,6 +33,7 @@ export default function FlashcardViewer({
   deckName,
   onExport,
   exporting = false,
+  exportDisabled = false,
 }: FlashcardViewerProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("deck");
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
@@ -217,7 +219,7 @@ export default function FlashcardViewer({
           {onExport && (
             <button
               onClick={onExport}
-              disabled={exporting}
+              disabled={exporting || exportDisabled}
               className="w-full sm:w-auto px-4 sm:px-6 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm sm:text-base font-semibold rounded-xl sm:rounded-2xl shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/40 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
             >
               <Download className="w-4 h-4" />
@@ -245,12 +247,12 @@ export default function FlashcardViewer({
               className="min-h-[240px] sm:min-h-[280px] rounded-2xl sm:rounded-3xl shadow-2xl cursor-pointer relative overflow-hidden select-none"
               style={{
                 transform: (isSwipping || isDragging)
-                  ? `translateX(${swipeOffset}px) rotate(${swipeOffset / 20}deg)` 
+                  ? `translate3d(${swipeOffset}px, 0, 0) rotate(${swipeOffset / 20}deg)` 
                   : slideDirection === "left"
-                  ? "translateX(-100%)"
+                  ? "translate3d(-100%, 0, 0)"
                   : slideDirection === "right"
-                  ? "translateX(100%)"
-                  : "translateX(0)",
+                  ? "translate3d(100%, 0, 0)"
+                  : "translate3d(0, 0, 0)",
                 opacity: slideDirection ? 0 : 1,
                 transition: (isSwipping || isDragging) ? "none" : "transform 0.3s ease-out, opacity 0.3s ease-out",
                 transformStyle: "preserve-3d",
@@ -266,13 +268,16 @@ export default function FlashcardViewer({
             >
               {/* Front */}
               <div
-                className={`absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl sm:rounded-3xl p-6 sm:p-8 flex flex-col justify-center items-center text-white transition-all duration-500 overflow-hidden ${
+                className={`absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl sm:rounded-3xl p-6 sm:p-8 flex flex-col justify-center items-center text-white overflow-hidden ${
                   !showAnswer ? "hover:scale-[1.02]" : ""
                 }`}
                 style={{
                   backfaceVisibility: "hidden",
+                  WebkitBackfaceVisibility: "hidden",
                   transform: showAnswer ? "rotateY(180deg)" : "rotateY(0deg)",
                   transformStyle: "preserve-3d",
+                  transition: "transform 0.5s ease-out",
+                  willChange: "transform",
                 }}
               >
                 <div className="text-center space-y-3 sm:space-y-4 px-2">
@@ -291,13 +296,16 @@ export default function FlashcardViewer({
 
               {/* Back */}
               <div
-                className={`absolute inset-0 bg-gradient-to-br from-cyan-500 to-sky-500 rounded-2xl sm:rounded-3xl p-6 sm:p-8 flex flex-col justify-center items-center text-white transition-all duration-500 overflow-hidden ${
+                className={`absolute inset-0 bg-gradient-to-br from-cyan-500 to-sky-500 rounded-2xl sm:rounded-3xl p-6 sm:p-8 flex flex-col justify-center items-center text-white overflow-hidden ${
                   showAnswer ? "hover:scale-[1.02]" : ""
                 }`}
                 style={{
                   backfaceVisibility: "hidden",
+                  WebkitBackfaceVisibility: "hidden",
                   transform: showAnswer ? "rotateY(0deg)" : "rotateY(-180deg)",
                   transformStyle: "preserve-3d",
+                  transition: "transform 0.5s ease-out",
+                  willChange: "transform",
                 }}
               >
                 <div className="text-center space-y-3 sm:space-y-4 w-full px-2">

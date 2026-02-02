@@ -144,31 +144,6 @@ export default function DeckPage() {
             <span className="text-sm font-medium">Voltar para Meus Decks</span>
           </Link>
 
-          {/* Deck Info */}
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-blue-100">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2 break-words">
-                  {deck.name}
-                </h1>
-                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                  <span className="flex items-center gap-1">
-                    <span className="font-medium">{deck.cards.length}</span>
-                    <span>{deck.cards.length === 1 ? 'card' : 'cards'}</span>
-                  </span>
-                  <span>•</span>
-                  <span className="capitalize">Densidade: {deck.density}</span>
-                  {deck.metadata?.language && (
-                    <>
-                      <span>•</span>
-                      <span>Idioma: {deck.metadata.language}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Flashcard Viewer */}
           <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl p-4 sm:p-8 border border-blue-100">
             <FlashcardViewer

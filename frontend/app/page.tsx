@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import axios from "axios";
 import {
   FileText,
@@ -26,6 +25,7 @@ import { useToast } from "@/hooks/useToast";
 import ToastContainer from "@/components/ToastContainer";
 import { useUpgradeModal } from "@/hooks/useUpgradeModal";
 import UpgradeModal from "@/components/UpgradeModal";
+import { useAuthModal } from "@/contexts/AuthModalContext";
 import FlashcardViewer from "@/components/FlashcardViewer";
 
 // Backend API URL
@@ -63,8 +63,8 @@ const loadingMessages = [
 ];
 
 export default function Home() {
-  const router = useRouter();
   const { user, loading: authLoading, isAuthenticated, getAllowedDensities, canUploadPdf, getPdfLimit, getPdfUsed, refreshLimits } = useUser();
+  const { openLoginModal } = useAuthModal();
   
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [density, setDensity] = useState<Density>("low");
@@ -112,6 +112,27 @@ export default function Home() {
     };
   }, [loading]);
 
+  // Bloquear scroll do fundo quando o overlay de loading está visível
+  useEffect(() => {
+    if (loading) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [loading]);
+
+  // Logado com apenas uma densidade (ex.: free): manter "Baixa" selecionada e não permitir alterar
+  const allowedDensities = isAuthenticated ? getAllowedDensities() : [];
+  const canChangeDensity = allowedDensities.length > 1;
+  useEffect(() => {
+    if (isAuthenticated && allowedDensities.length === 1 && allowedDensities[0] === "low") {
+      setDensity("low");
+    }
+  }, [isAuthenticated, allowedDensities.length, allowedDensities[0]]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -130,7 +151,7 @@ export default function Home() {
 
   const handleGenerate = async () => {
     if (!isAuthenticated) {
-      router.push('/login');
+      openLoginModal();
       return;
     }
 
@@ -256,22 +277,15 @@ export default function Home() {
   };
 
   const handleExport = async () => {
-    if (cards.length === 0) return;
+    if (!deckId) return;
 
     setExporting(true);
     setError(null);
 
     try {
-      const response = await api.post(
-        '/export',
-        {
-          cards,
-          deckName: pdfFile?.name.replace(".pdf", "") || "Meu Deck",
-        },
-        {
-          responseType: "blob",
-        }
-      );
+      const response = await api.get(`/export/deck/${deckId}`, {
+        responseType: "blob",
+      });
 
       const blob = new Blob([response.data], { type: "application/apkg" });
       const url = window.URL.createObjectURL(blob);
@@ -306,7 +320,6 @@ export default function Home() {
 
   const pdfLimit = isAuthenticated ? getPdfLimit() : 0;
   const pdfUsed = isAuthenticated ? getPdfUsed() : 0;
-  const allowedDensities = isAuthenticated ? getAllowedDensities() : [];
 
   return (
     <>
@@ -407,20 +420,21 @@ export default function Home() {
                   { value: "high" as Density, label: "Alta", desc: "~60" },
                 ].map((option) => {
                   const isLocked = !allowedDensities.includes(option.value);
+                  const isSelected = density === option.value;
                   return (
                     <button
                       key={option.value}
-                      onClick={() => !isLocked && setDensity(option.value)}
+                      onClick={() => canChangeDensity && !isLocked && setDensity(option.value)}
                       disabled={isLocked}
                       className={`relative px-2 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl font-medium transition-all duration-300 ${
-                        isLocked
-                          ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
-                          : density === option.value
+                        isSelected
                           ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30 scale-105"
+                          : isLocked
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
                           : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
                       }`}
                     >
-                      {isLocked && (
+                      {isLocked && !isSelected && (
                         <Lock className="w-3 h-3 absolute top-1 right-1" />
                       )}
                       <div className="text-xs sm:text-sm flex items-center gap-1 justify-center">
@@ -477,24 +491,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Loading */}
-        {loading && (
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-xl shadow-blue-500/10 p-4 sm:p-8 border border-blue-100">
-            <div className="space-y-4">
-              <div className="flex items-center justify-center gap-2 sm:gap-3 text-blue-600 text-sm sm:text-base font-medium text-center px-2">
-                <CurrentLoadingIcon className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse flex-shrink-0" />
-                <span>{loadingMessages[loadingMessageIndex]?.text}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full transition-all duration-500"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Cards Display */}
         {cards.length > 0 && !loading && (
           <div ref={cardsContainerRef} className="bg-white/70 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-xl shadow-blue-500/10 p-4 sm:p-8 border border-blue-100">
@@ -509,11 +505,35 @@ export default function Home() {
               cards={cards}
               onExport={handleExport}
               exporting={exporting}
+              exportDisabled={!deckId}
             />
           </div>
         )}
       </div>
     </main>
+
+      {/* Loading overlay - fora do main, z-[100] para ficar acima do header em qualquer scroll */}
+      {loading && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 mx-4 max-w-sm w-full border border-blue-100">
+            <div className="space-y-4">
+              <div className="flex items-center justify-center gap-3 text-blue-600 text-sm sm:text-base font-medium text-center">
+                <CurrentLoadingIcon className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse flex-shrink-0" />
+                <span>{loadingMessages[loadingMessageIndex]?.text}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="text-xs text-center text-gray-500 leading-relaxed">
+                Pode demorar um pouco. Por favor, não feche esta aba.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

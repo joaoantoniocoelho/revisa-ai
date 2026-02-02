@@ -16,7 +16,7 @@ CRITICAL RULES:
 3. One concept per card
 4. Direct, specific questions (no "Explain..." or "Describe...")
 5. Short answers (1-2 sentences max)
-6. Gere TODOS os flashcards em PORTUGUÊS (pt-BR).
+6. Generate ALL flashcards in Portuguese (pt-BR).
 7. Add 2-4 relevant tags per card
 
 JSON FORMAT (CRITICAL):

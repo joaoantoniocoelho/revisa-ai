@@ -9,25 +9,25 @@ export function createAuthenticate() {
     try {
       const authHeader = req.headers.authorization;
       if (!authHeader?.startsWith('Bearer ')) {
-        res.status(401).json({ error: 'Token não fornecido' });
+        res.status(401).json({ error: 'Token not provided' });
         return;
       }
       const token = authHeader.split(' ')[1];
       const decoded = verifyToken(token);
       if (!decoded) {
-        res.status(401).json({ error: 'Token inválido ou expirado' });
+        res.status(401).json({ error: 'Invalid or expired token' });
         return;
       }
       const user = await userRepository.findById(decoded.id);
       if (!user) {
-        res.status(401).json({ error: 'Usuário não encontrado' });
+        res.status(401).json({ error: 'User not found' });
         return;
       }
       req.user = user;
       next();
     } catch (error) {
       console.error('Auth middleware error:', error);
-      res.status(401).json({ error: 'Não autorizado' });
+      res.status(401).json({ error: 'Unauthorized' });
     }
   };
 }
