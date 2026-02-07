@@ -2,20 +2,14 @@
 
 import { useState, useCallback } from 'react';
 
-export function useUpgradeModal() {
+export function useCreditsModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
-  const [features, setFeatures] = useState<string[]>([]);
 
-  const showUpgradeModal = useCallback((
-    modalTitle: string,
-    modalMessage: string,
-    modalFeatures: string[] = []
-  ) => {
+  const showCreditsModal = useCallback((modalTitle: string, modalMessage: string) => {
     setTitle(modalTitle);
     setMessage(modalMessage);
-    setFeatures(modalFeatures);
     setIsOpen(true);
   }, []);
 
@@ -27,8 +21,7 @@ export function useUpgradeModal() {
     isOpen,
     title,
     message,
-    features,
-    showUpgradeModal,
+    showCreditsModal,
     closeModal,
   };
 }

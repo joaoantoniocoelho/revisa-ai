@@ -5,6 +5,7 @@ import { connectDB } from './config/database.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createDecksRouter } from './routes/decks.js';
 import { createExportRouter } from './routes/export.js';
+import { createCreditsRouter } from './routes/credits.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -23,6 +24,7 @@ app.use(express.json());
 app.use('/api/auth', createAuthRouter());
 app.use('/api/decks', createDecksRouter());
 app.use('/api/export', createExportRouter());
+app.use('/api/credits', createCreditsRouter());
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', message: 'Backend is running' });

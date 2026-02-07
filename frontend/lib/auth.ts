@@ -4,28 +4,9 @@ export interface User {
   _id: string;
   name: string;
   email: string;
-  planType: 'free' | 'paid';
-  monthlyPdfCount: number;
-  lastPdfResetDate: string;
-  createdAt: string;
-  updatedAt: string;
-  limits?: {
-    plan: {
-      name: string;
-      displayName: string;
-      features: string[];
-    };
-    limits: {
-      pdfsPerMonth: number;
-      allowedDensities: string[];
-      maxCardsPerDeck: number | null;
-    };
-    usage: {
-      pdfUsed: number;
-      pdfRemaining: number;
-      canUploadPdf: boolean;
-    };
-  };
+  credits?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export async function login(email: string, password: string): Promise<{ user: User; token: string }> {

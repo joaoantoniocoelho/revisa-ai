@@ -6,7 +6,6 @@ import type { Density, FlashcardEntity } from '../types/index.js';
 import { generateFlashcards } from '../gemini/client.js';
 import { GEMINI_MODEL, DENSITY_CONFIG } from '../gemini/config.js';
 import { PDF_LIMITS } from '../config/limits.js';
-import { withLlmSlot } from '../utils/concurrency.js';
 import { chunkText } from '../utils/chunking.js';
 import {
   dedupeCards,
@@ -115,10 +114,6 @@ export class DeckService {
     originalFilename: string,
     density: Density
   ): Promise<GenerateDeckResult> {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey?.trim()) {
-      throw new Error('GEMINI_API_KEY is not configured on the server');
-    }
     const pdf = await import('pdf-parse');
     const data = await pdf.default(buffer);
     let text = (data.text as string).trim();
@@ -169,9 +164,7 @@ export class DeckService {
         try {
           const chunkNum = i + index + 1;
           console.log(`[${chunkNum}/${chunks.length}] Generating flashcards...`);
-          const cards = await withLlmSlot(() =>
-            generateFlashcards(chunk, density, apiKey, cardsPerChunk)
-          );
+          const cards = await generateFlashcards(chunk, density, cardsPerChunk);
           console.log(`[${chunkNum}/${chunks.length}] ✓ ${cards.length} cards generated`);
           return cards;
         } catch (error) {

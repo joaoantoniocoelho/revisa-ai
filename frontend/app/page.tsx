@@ -7,7 +7,6 @@ import {
   Upload,
   Target,
   Sparkles,
-  Download,
   GraduationCap,
   CheckCircle2,
   Search,
@@ -15,18 +14,17 @@ import {
   Trash2,
   AlertCircle,
   Loader2,
-  X,
-  Lock,
 } from "lucide-react";
 import Header from "@/components/Header";
 import { useUser } from "@/contexts/UserContext";
 import api from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 import ToastContainer from "@/components/ToastContainer";
-import { useUpgradeModal } from "@/hooks/useUpgradeModal";
-import UpgradeModal from "@/components/UpgradeModal";
+import { useCreditsModal } from "@/hooks/useCreditsModal";
+import CreditsModal from "@/components/CreditsModal";
 import { useAuthModal } from "@/contexts/AuthModalContext";
 import FlashcardViewer from "@/components/FlashcardViewer";
+import { fetchCreditsConfig } from "@/lib/credits";
 
 // Backend API URL
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
@@ -63,7 +61,7 @@ const loadingMessages = [
 ];
 
 export default function Home() {
-  const { user, loading: authLoading, isAuthenticated, getAllowedDensities, canUploadPdf, getPdfLimit, getPdfUsed, refreshLimits } = useUser();
+  const { user, loading: authLoading, isAuthenticated, getCredits, refreshUser } = useUser();
   const { openLoginModal } = useAuthModal();
   
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -71,17 +69,19 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
-  const [error, setError] = useState<string | null>(null);
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [meta, setMeta] = useState<GenerateResponse["meta"] | null>(null);
   const [exporting, setExporting] = useState(false);
   const [deckId, setDeckId] = useState<string | null>(null);
   const cardsContainerRef = useRef<HTMLDivElement>(null);
-  
-  const { toasts, showToast, removeToast } = useToast();
-  const { isOpen: isUpgradeModalOpen, title: modalTitle, message: modalMessage, features: modalFeatures, showUpgradeModal, closeModal } = useUpgradeModal();
+  const [creditsConfig, setCreditsConfig] = useState<{ creditsPerPage: number } | null>(null);
 
-  // Não redireciona mais - app funciona sem autenticação
+  const { toasts, showToast, removeToast } = useToast();
+  const { isOpen: isCreditsModalOpen, title: modalTitle, message: modalMessage, showCreditsModal, closeModal } = useCreditsModal();
+
+  useEffect(() => {
+    fetchCreditsConfig().then((cfg) => setCreditsConfig(cfg)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!loading) {
@@ -124,28 +124,19 @@ export default function Home() {
     };
   }, [loading]);
 
-  // Logado com apenas uma densidade (ex.: free): manter "Baixa" selecionada e não permitir alterar
-  const allowedDensities = isAuthenticated ? getAllowedDensities() : [];
-  const canChangeDensity = allowedDensities.length > 1;
-  useEffect(() => {
-    if (isAuthenticated && allowedDensities.length === 1 && allowedDensities[0] === "low") {
-      setDensity("low");
-    }
-  }, [isAuthenticated, allowedDensities.length, allowedDensities[0]]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.type !== "application/pdf") {
-        setError("Por favor, selecione um arquivo PDF válido");
+        showToast("Por favor, selecione um arquivo PDF válido", "error");
         return;
       }
       if (file.size > 10 * 1024 * 1024) {
-        setError("PDF deve ter menos de 10MB");
+        showToast("PDF deve ter menos de 10MB", "error");
         return;
       }
       setPdfFile(file);
-      setError(null);
     }
   };
 
@@ -156,48 +147,11 @@ export default function Home() {
     }
 
     if (!pdfFile) {
-      setError("Selecione um arquivo PDF");
-      return;
-    }
-
-    if (!canUploadPdf()) {
-      const limit = getPdfLimit();
-      const used = getPdfUsed();
-      showUpgradeModal(
-        'Limite de PDFs Atingido',
-        `Você já utilizou ${used} de ${limit} PDFs disponíveis este mês no plano Free. Faça upgrade para o Plano Pro e envie até 20 PDFs por mês!`,
-        [
-          '20 PDFs por mês (vs 2 no Free)',
-          'Todas as densidades (low, medium, high)',
-          'Suporte prioritário',
-          'Acesso ilimitado ao histórico de decks',
-        ]
-      );
-      return;
-    }
-
-    const allowed = getAllowedDensities();
-    if (!allowed.includes(density)) {
-      const densityNames = {
-        low: 'Baixa (~20 cards)',
-        medium: 'Média (~40 cards)',
-        high: 'Alta (~60 cards)',
-      };
-      showUpgradeModal(
-        'Densidade Não Disponível',
-        `A densidade ${densityNames[density]} está disponível apenas no Plano Pro. No plano Free, você só pode usar a densidade Baixa (~20 cards).`,
-        [
-          'Densidade Baixa, Média e Alta',
-          '20 PDFs por mês',
-          'Suporte prioritário',
-          'Acesso ilimitado ao histórico de decks',
-        ]
-      );
+      showToast("Selecione um arquivo PDF", "error");
       return;
     }
 
     setLoading(true);
-    setError(null);
       setCards([]);
       setMeta(null);
       setProgress(0);
@@ -246,7 +200,7 @@ export default function Home() {
         });
       });
 
-      refreshLimits();
+      refreshUser();
     } catch (err: unknown) {
       setLoading(false);
 
@@ -256,29 +210,23 @@ export default function Home() {
         const message = errorData?.error ?? errorData?.message ?? "Erro ao gerar flashcards";
 
         if (status === 400) {
-          setError(message);
           showToast(message, "error");
           return;
         }
 
-        if (status === 403) {
-          const isLimitError = message.toLowerCase().includes("limite");
-          const isDensityError = message.toLowerCase().includes("densidade");
+        if (status === 402) {
+          const data = err.response?.data as { creditsRequired?: number; creditsAvailable?: number } | undefined;
+          const req = data?.creditsRequired ?? 0;
+          const avail = data?.creditsAvailable ?? 0;
+          const msg = req && avail
+            ? `Esta geração requer ${req} crédito${req !== 1 ? 's' : ''}. Você tem ${avail} disponíveis.`
+            : "Você não tem créditos suficientes para esta geração.";
+          showCreditsModal("Créditos insuficientes", msg);
+          return;
+        }
 
-          if (isLimitError || isDensityError) {
-            showUpgradeModal(
-              isLimitError ? "Limite de PDFs Atingido" : "Densidade Não Disponível",
-              message + (errorData?.message ? `. ${errorData.message}` : ""),
-              [
-                "20 PDFs por mês",
-                "Todas as densidades (low, medium, high)",
-                "Suporte prioritário",
-                "Acesso ilimitado ao histórico de decks",
-              ]
-            );
-          } else {
-            setError(message);
-          }
+        if (status === 403) {
+          showToast(message, "error");
           return;
         }
 
@@ -286,18 +234,6 @@ export default function Home() {
           const msg =
             errorData?.message ??
             "Você já tem uma geração em andamento. Aguarde a conclusão antes de iniciar outra.";
-          setError(msg);
-          showToast(msg, "error");
-          return;
-        }
-
-        if (status === 429) {
-          const retryAfter = err.response?.headers?.["retry-after"];
-          const seconds = retryAfter ? parseInt(String(retryAfter), 10) : 60;
-          const msg =
-            errorData?.message ??
-            `Servidor ocupado. Muitas gerações em andamento. Tente novamente em ${seconds} segundos.`;
-          setError(msg);
           showToast(msg, "error");
           return;
         }
@@ -306,30 +242,23 @@ export default function Home() {
           const msg =
             message ||
             "Erro interno do servidor. Se o problema persistir, tente novamente em alguns minutos.";
-          setError(msg);
           showToast(msg, "error");
           return;
         }
 
         if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
-          const msg = "A requisição demorou muito. Verifique sua conexão e tente novamente.";
-          setError(msg);
-          showToast(msg, "error");
+          showToast("A requisição demorou muito. Verifique sua conexão e tente novamente.", "error");
           return;
         }
 
         if (err.code === "ERR_NETWORK" || !err.response) {
-          const msg = "Erro de conexão. Verifique sua internet e tente novamente.";
-          setError(msg);
-          showToast(msg, "error");
+          showToast("Erro de conexão. Verifique sua internet e tente novamente.", "error");
           return;
         }
 
-        setError(message);
         showToast(message, "error");
       } else {
         const msg = err instanceof Error ? err.message : "Erro desconhecido ao gerar flashcards";
-        setError(msg);
         showToast(msg, "error");
       }
     }
@@ -339,7 +268,6 @@ export default function Home() {
     if (!deckId) return;
 
     setExporting(true);
-    setError(null);
 
     try {
       const response = await api.get(`/export/deck/${deckId}`, {
@@ -356,11 +284,10 @@ export default function Home() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch (err: unknown) {
-      if (axios.isAxiosError(err) && err.response) {
-        setError(err.response.data.error || "Erro ao exportar");
-      } else {
-        setError(err instanceof Error ? err.message : "Erro ao exportar");
-      }
+      const msg = axios.isAxiosError(err) && err.response
+        ? err.response.data.error || "Erro ao exportar"
+        : err instanceof Error ? err.message : "Erro ao exportar";
+      showToast(String(msg), "error");
     } finally {
       setExporting(false);
     }
@@ -377,18 +304,16 @@ export default function Home() {
     );
   }
 
-  const pdfLimit = isAuthenticated ? getPdfLimit() : 0;
-  const pdfUsed = isAuthenticated ? getPdfUsed() : 0;
+  const credits = isAuthenticated ? getCredits() : 0;
 
   return (
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-      <UpgradeModal 
-        isOpen={isUpgradeModalOpen}
+      <CreditsModal 
+        isOpen={isCreditsModalOpen}
         onClose={closeModal}
         title={modalTitle}
         message={modalMessage}
-        features={modalFeatures}
       />
       <Header />
       <main className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-sky-50 py-6 md:py-12 px-4 pb-28 md:pb-6">
@@ -404,33 +329,17 @@ export default function Home() {
             </p>
           </div>
 
-        {/* Usage Info */}
+        {/* Credits Info */}
         {user && (
           <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-gray-700">Uso mensal</p>
+                <p className="text-sm font-semibold text-gray-700">Créditos</p>
                 <p className="text-xs text-gray-600 mt-1">
-                  {pdfUsed} de {pdfLimit} PDFs utilizados este mês
+                  Você tem <span className="font-bold text-blue-600">{credits} créditos</span> disponíveis
                 </p>
-                <div className="mt-2 w-full sm:w-64 bg-white rounded-full h-2 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-300"
-                    style={{ width: `${(pdfUsed / pdfLimit) * 100}%` }}
-                  />
-                </div>
               </div>
-              {user.planType === 'free' && pdfUsed >= pdfLimit && (
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 text-xs text-red-600 bg-red-50 px-4 py-3 rounded-lg border border-red-200">
-                  <span className="flex-1">Limite atingido. Faça upgrade para continuar.</span>
-                  <button
-                    onClick={() => window.location.href = '/upgrade'}
-                    className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200"
-                  >
-                    Fazer Upgrade
-                  </button>
-                </div>
-              )}
+              <div className="text-2xl font-bold text-blue-600">{credits}</div>
             </div>
           </div>
         )}
@@ -478,24 +387,17 @@ export default function Home() {
                   { value: "medium" as Density, label: "Média", desc: "~35" },
                   { value: "high" as Density, label: "Alta", desc: "~60" },
                 ].map((option) => {
-                  const isLocked = !allowedDensities.includes(option.value);
                   const isSelected = density === option.value;
                   return (
                     <button
                       key={option.value}
-                      onClick={() => canChangeDensity && !isLocked && setDensity(option.value)}
-                      disabled={isLocked}
+                      onClick={() => setDensity(option.value)}
                       className={`relative px-2 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl font-medium transition-all duration-300 ${
                         isSelected
                           ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30 scale-105"
-                          : isLocked
-                          ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
                           : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
                       }`}
                     >
-                      {isLocked && !isSelected && (
-                        <Lock className="w-3 h-3 absolute top-1 right-1" />
-                      )}
                       <div className="text-xs sm:text-sm flex items-center gap-1 justify-center">
                         {option.label}
                       </div>
@@ -504,19 +406,10 @@ export default function Home() {
                   );
                 })}
               </div>
-              {user?.planType === 'free' && (
-                <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs text-gray-700 flex items-center gap-1">
-                    <Lock className="w-3 h-3" />
-                    Densidades média e alta disponíveis no plano Pro
-                  </p>
-                  <button
-                    onClick={() => window.location.href = '/upgrade'}
-                    className="w-full sm:w-auto px-3 py-1.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200"
-                  >
-                    Fazer Upgrade
-                  </button>
-                </div>
+              {creditsConfig && (
+                <p className="mt-2 text-xs text-gray-500">
+                  Custo: {creditsConfig.creditsPerPage} crédito{creditsConfig.creditsPerPage !== 1 ? 's' : ''} por página do PDF
+                </p>
               )}
             </div>
 
@@ -539,29 +432,6 @@ export default function Home() {
             </div>
           </div>
         </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl">
-            <div className="flex items-start sm:items-center gap-3">
-              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 sm:mt-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm sm:text-base font-medium">{error}</p>
-                <p className="text-xs text-red-600 mt-1">
-                  Corrija o problema e tente novamente, ou escolha outro PDF.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setError(null)}
-                className="flex-shrink-0 p-1 hover:bg-red-100 rounded-lg transition-colors"
-                aria-label="Fechar"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Cards Display */}
         {cards.length > 0 && !loading && (

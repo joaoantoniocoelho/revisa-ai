@@ -76,10 +76,14 @@ function cleanJsonResponse(text: string): string {
 export async function generateFlashcards(
   text: string,
   density: Density,
-  apiKey: string,
   cardsPerChunk: number | null = null,
   retryCount = 0
 ): Promise<FlashcardEntity[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey?.trim()) {
+    throw new Error('GEMINI_API_KEY is not configured on the server');
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
@@ -136,7 +140,7 @@ export async function generateFlashcards(
     if (err?.message?.includes('recover') && retryCount < 2) {
       console.log(`Retry ${retryCount + 1}/2 to recover cards...`);
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      return generateFlashcards(text, density, apiKey, cardsPerChunk, retryCount + 1);
+      return generateFlashcards(text, density, cardsPerChunk, retryCount + 1);
     }
     if (
       err?.message?.includes('API key not valid') ||

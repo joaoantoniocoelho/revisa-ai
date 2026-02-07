@@ -38,9 +38,7 @@ export class DeckController {
     } catch (error) {
       next(error);
     } finally {
-      req.releaseGenerationSlot?.();
       req.releaseUserSlot?.();
-      req.releaseGenerationSlot = undefined;
       req.releaseUserSlot = undefined;
     }
   };

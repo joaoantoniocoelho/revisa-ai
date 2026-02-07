@@ -1,16 +1,12 @@
 import mongoose, { type Model } from 'mongoose';
-import type { PlanType } from '../types/index.js';
+import { DEFAULT_CREDITS_FOR_NEW_USER } from '../config/credits.js';
 
 export interface IUserDoc {
   _id: mongoose.Types.ObjectId;
   name: string;
   email: string;
   password: string;
-  planType: PlanType;
-  monthlyPdfCount: number;
-  lastPdfResetDate: Date;
-  /** Current quota month (YYYY-MM); used for atomic reset */
-  pdfUsageMonth?: string;
+  credits: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -36,14 +32,11 @@ const userSchema = new mongoose.Schema<IUserDoc>(
       minlength: [6, 'Password must be at least 6 characters'],
       select: false,
     },
-    planType: {
-      type: String,
-      enum: ['free', 'paid'],
-      default: 'free',
+    credits: {
+      type: Number,
+      default: DEFAULT_CREDITS_FOR_NEW_USER,
+      min: 0,
     },
-    monthlyPdfCount: { type: Number, default: 0 },
-    lastPdfResetDate: { type: Date, default: Date.now },
-    pdfUsageMonth: { type: String, default: '0000-00' },
   },
   { timestamps: true }
 );

@@ -1,18 +1,21 @@
 import bcrypt from 'bcryptjs';
 import { UserModel, type IUserDoc } from '../models/User.js';
-import type { PlanType } from '../types/index.js';
+import { DEFAULT_CREDITS_FOR_NEW_USER } from '../config/credits.js';
 
 export interface CreateUserInput {
   name: string;
   email: string;
   password: string;
-  planType?: PlanType;
 }
 
 export class UserRepository {
   async create(data: CreateUserInput): Promise<IUserDoc> {
     const hashed = await bcrypt.hash(data.password, 10);
-    const user = await UserModel.create({ ...data, password: hashed });
+    const user = await UserModel.create({
+      ...data,
+      password: hashed,
+      credits: DEFAULT_CREDITS_FOR_NEW_USER,
+    });
     return user as unknown as IUserDoc;
   }
 
@@ -37,66 +40,31 @@ export class UserRepository {
     return doc ?? null;
   }
 
-  private getCurrentMonth(): string {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    return `${y}-${m}`;
-  }
-
-  /**
-   * Atomic monthly reset: resets the counter when the month changes.
-   * Single findOneAndUpdate operation.
-   */
-  async ensureMonthlyResetAndGet(userId: string): Promise<IUserDoc | null> {
-    const currentMonth = this.getCurrentMonth();
-    const now = new Date();
-    const updated = await UserModel.findOneAndUpdate(
-      { _id: userId, pdfUsageMonth: { $ne: currentMonth } },
-      {
-        $set: {
-          pdfUsageMonth: currentMonth,
-          monthlyPdfCount: 0,
-          lastPdfResetDate: now,
-        },
-      },
-      { new: true }
-    ).exec();
-    if (updated) return updated as unknown as IUserDoc;
-    const user = await UserModel.findById(userId).exec();
-    return user ? (user as unknown as IUserDoc) : null;
-  }
-
-  async tryConsumePdfQuota(
+  async tryDebitCredits(
     userId: string,
-    planLimit: number
-  ): Promise<{ consumed: boolean; newCount?: number }> {
-    const currentMonth = this.getCurrentMonth();
-    await UserModel.findOneAndUpdate(
-      { _id: userId, pdfUsageMonth: { $ne: currentMonth } },
-      {
-        $set: {
-          pdfUsageMonth: currentMonth,
-          monthlyPdfCount: 0,
-          lastPdfResetDate: new Date(),
-        },
-      }
-    ).exec();
+    amount: number
+  ): Promise<{ success: boolean }> {
+    if (amount <= 0) return { success: true };
     const updated = await UserModel.findOneAndUpdate(
-      { _id: userId, monthlyPdfCount: { $lt: planLimit } },
-      { $inc: { monthlyPdfCount: 1 } },
+      { _id: userId, credits: { $gte: amount } },
+      { $inc: { credits: -amount } },
       { new: true }
-    )
-      .select('monthlyPdfCount')
-      .exec();
-    if (!updated) return { consumed: false };
-    return { consumed: true, newCount: updated.monthlyPdfCount };
+    ).exec();
+    return { success: !!updated };
   }
 
-  async releasePdfQuota(userId: string): Promise<void> {
-    await UserModel.findOneAndUpdate(
-      { _id: userId, monthlyPdfCount: { $gt: 0 } },
-      { $inc: { monthlyPdfCount: -1 } }
-    ).exec();
+  /** Refund credits (rollback on failure). */
+  async refundCredits(userId: string, amount: number): Promise<void> {
+    if (amount <= 0) return;
+    await UserModel.findByIdAndUpdate(userId, {
+      $inc: { credits: amount },
+    }).exec();
+  }
+
+  async getCredits(userId: string): Promise<number> {
+    const doc = await UserModel.findById(userId).select('credits').lean().exec();
+    if (!doc) return 0;
+    const credits = (doc as { credits?: number }).credits;
+    return typeof credits === 'number' ? credits : 0;
   }
 }

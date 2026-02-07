@@ -4,12 +4,11 @@ import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { DeckController } from '../controllers/DeckController.js';
-import { UserLimitsService } from '../services/UserLimitsService.js';
+import { CreditsService } from '../services/CreditsService.js';
 import { createAuthenticate } from '../middlewares/auth.js';
-import {
-  createCheckPdfLimit,
-  createCheckDensityAccess,
-} from '../middlewares/checkLimits.js';
+import { createCheckDensityAccess } from '../middlewares/checkLimits.js';
+import { createCheckCreditsByPdf } from '../middlewares/checkCreditsByPdf.js';
+import { InsufficientCreditsError } from '../errors/InsufficientCreditsError.js';
 import { createCheckGenerationSlots } from '../middlewares/generationSlots.js';
 
 const uploadsDir = path.join(process.cwd(), 'uploads', 'tmp');
@@ -38,9 +37,10 @@ const upload = multer({
 
 export function createDecksRouter(): Router {
   const deckController = new DeckController();
+  const creditsService = new CreditsService();
   const authenticate = createAuthenticate();
   const checkDensityAccess = createCheckDensityAccess();
-  const checkPdfLimit = createCheckPdfLimit();
+  const checkCreditsByPdf = createCheckCreditsByPdf();
   const checkGenerationSlots = createCheckGenerationSlots();
   const router = Router();
 
@@ -48,9 +48,9 @@ export function createDecksRouter(): Router {
     '/generate',
     authenticate,
     checkDensityAccess,
-    checkPdfLimit,
     checkGenerationSlots,
     upload.single('pdf'),
+    checkCreditsByPdf,
     deckController.generate
   );
   router.get('/', authenticate, deckController.getDecks);
@@ -58,7 +58,6 @@ export function createDecksRouter(): Router {
   router.patch('/:deckId', authenticate, deckController.updateDeck);
   router.delete('/:deckId', authenticate, deckController.deleteDeck);
 
-  const limitsService = new UserLimitsService();
   router.use(
     async (
       error: unknown,
@@ -66,11 +65,13 @@ export function createDecksRouter(): Router {
       res: Response,
       _next: NextFunction
     ): Promise<void> => {
-      req.releaseGenerationSlot?.();
       req.releaseUserSlot?.();
-      if (req.pdfQuotaConsumed && req.user?._id) {
+      if (req.creditsConsumed && req.creditsAmount != null && req.user?._id) {
         try {
-          await limitsService.releasePdfQuota(req.user._id.toString());
+          await creditsService.refundCredits(
+            req.user._id.toString(),
+            req.creditsAmount
+          );
         } catch {
           /* ignore */
         }
@@ -93,6 +94,15 @@ export function createDecksRouter(): Router {
       }
       if (error instanceof Error && error.message === 'File must be a PDF') {
         res.status(400).json({ error: 'File must be a PDF' });
+        return;
+      }
+      if (error instanceof InsufficientCreditsError) {
+        res.status(402).json({
+          error: 'Insufficient credits',
+          message: error.message,
+          creditsRequired: error.creditsRequired,
+          creditsAvailable: error.creditsAvailable,
+        });
         return;
       }
       console.error('Deck route error:', error);

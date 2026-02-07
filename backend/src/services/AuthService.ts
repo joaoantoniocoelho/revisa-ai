@@ -1,17 +1,17 @@
 import bcrypt from 'bcryptjs';
 import { UserRepository } from '../repositories/UserRepository.js';
-import { UserLimitsService } from './UserLimitsService.js';
+import { CreditsService } from './CreditsService.js';
 import { generateToken } from '../config/jwt.js';
 import { toUserResponse } from '../utils/user.js';
 
 export interface AuthServiceResult {
-  user?: Record<string, unknown> & { limits?: unknown };
+  user?: Record<string, unknown> & { credits?: number };
   token?: string;
 }
 
 export class AuthService {
   private readonly userRepository = new UserRepository();
-  private readonly userLimitsService = new UserLimitsService();
+  private readonly creditsService = new CreditsService();
 
   async signup(data: {
     name: string;
@@ -26,14 +26,13 @@ export class AuthService {
       name: data.name,
       email: data.email,
       password: data.password,
-      planType: 'free',
     });
     const token = generateToken(user._id.toString());
-    const limits = await this.userLimitsService.getUserLimits(user);
+    const credits = await this.creditsService.getCredits(user);
     return {
       user: {
         ...toUserResponse(user),
-        limits,
+        credits,
       },
       token,
     };
@@ -49,11 +48,11 @@ export class AuthService {
       throw new Error('Invalid credentials');
     }
     const token = generateToken(user._id.toString());
-    const limits = await this.userLimitsService.getUserLimits(user);
+    const credits = await this.creditsService.getCredits(user);
     return {
       user: {
         ...toUserResponse(user),
-        limits,
+        credits,
       },
       token,
     };
@@ -64,11 +63,11 @@ export class AuthService {
     if (!user) {
       throw new Error('User not found');
     }
-    const limits = await this.userLimitsService.getUserLimits(user);
+    const credits = await this.creditsService.getCredits(user);
     return {
       user: {
         ...toUserResponse(user),
-        limits,
+        credits,
       },
     };
   }
