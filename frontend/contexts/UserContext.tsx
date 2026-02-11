@@ -1,12 +1,12 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getProfile, isAuthenticated as checkAuth, type User } from '@/lib/auth';
+import { getProfile, type User } from '@/lib/auth';
 interface UserContextType {
   user: User | null;
   loading: boolean;
   isAuthenticated: boolean;
-  setUser: (user: User, token: string) => void;
+  setUser: (user: User) => void;
   updateUser: (data: Partial<User>) => void;
   refreshUser: () => Promise<void>;
   getCredits: () => number;
@@ -29,16 +29,10 @@ export function UserProvider({ children }: UserProviderProps) {
 
   const loadUser = async () => {
     try {
-      if (!checkAuth()) {
-        setLoading(false);
-        return;
-      }
-
       const freshUser = await getProfile();
       setUserState(freshUser);
       setIsAuthenticated(true);
-    } catch (error) {
-      console.error('Error loading user:', error);
+    } catch {
       setUserState(null);
       setIsAuthenticated(false);
     } finally {
@@ -46,10 +40,7 @@ export function UserProvider({ children }: UserProviderProps) {
     }
   };
 
-  const setUser = (userData: User, token: string) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('token', token);
-    }
+  const setUser = (userData: User) => {
     setUserState(userData);
     setIsAuthenticated(true);
   };

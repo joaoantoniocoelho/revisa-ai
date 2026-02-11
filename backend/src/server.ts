@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { connectDB } from './config/database.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createDecksRouter } from './routes/decks.js';
@@ -20,6 +21,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(cookieParser());
 
 app.use('/api/auth', createAuthRouter());
 app.use('/api/decks', createDecksRouter());

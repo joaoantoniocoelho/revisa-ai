@@ -1,6 +1,17 @@
 import type { Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import { AuthService } from '../services/AuthService.js';
+import { AUTH_COOKIE_NAME, getAuthCookieOptions } from '../config/authCookie.js';
+
+function clearAuthCookie(res: Response): void {
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.clearCookie(AUTH_COOKIE_NAME, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProduction,
+  });
+}
 
 const DEFAULT_FRONTEND_ORIGIN = 'http://localhost:3000';
 
@@ -41,9 +52,10 @@ export class AuthController {
         email: email!,
         password: password!,
       });
+      res.cookie(AUTH_COOKIE_NAME, result.token, getAuthCookieOptions());
       res.status(201).json({
         message: 'User created successfully',
-        ...result,
+        user: result.user,
       });
     } catch (error) {
       console.error('Signup error:', error);
@@ -68,9 +80,10 @@ export class AuthController {
         email: email!,
         password: password!,
       });
+      res.cookie(AUTH_COOKIE_NAME, result.token, getAuthCookieOptions());
       res.status(200).json({
         message: 'Login successful',
-        ...result,
+        user: result.user,
       });
     } catch (error) {
       console.error('Login error:', error);
@@ -92,9 +105,10 @@ export class AuthController {
       }
       const { credential } = req.body as { credential?: string };
       const result = await this.authService.loginWithGoogle(credential!);
+      res.cookie(AUTH_COOKIE_NAME, result.token, getAuthCookieOptions());
       res.status(200).json({
         message: 'Login successful',
-        ...result,
+        user: result.user,
       });
     } catch (error) {
       console.error('Google login error:', error);
@@ -147,5 +161,10 @@ export class AuthController {
       const status = msg.includes('already verified') ? 400 : msg.includes('Aguarde') ? 429 : 500;
       res.status(status).json({ error: msg });
     }
+  };
+
+  logout = (_req: Request, res: Response): void => {
+    clearAuthCookie(res);
+    res.status(200).json({ message: 'Logged out' });
   };
 }

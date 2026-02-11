@@ -7,12 +7,12 @@ export function createAuthenticate() {
   const userRepository = new UserRepository();
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith('Bearer ')) {
+      const cookieToken = req.cookies?.token;
+      const token = cookieToken;
+      if (!token) {
         res.status(401).json({ error: 'Token not provided' });
         return;
       }
-      const token = authHeader.split(' ')[1];
       const decoded = verifyToken(token);
       if (!decoded) {
         res.status(401).json({ error: 'Invalid or expired token' });

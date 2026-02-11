@@ -31,6 +31,7 @@ export function createAuthRouter(): Router {
   router.get('/profile', authenticate, authController.getProfile);
   router.get('/verify-email', authController.verifyEmail);
   router.post('/resend-verification', authenticate, authController.resendVerification);
+  router.post('/logout', authController.logout);
 
   return router;
 }

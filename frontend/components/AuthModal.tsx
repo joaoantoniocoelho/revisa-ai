@@ -37,8 +37,8 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
     setGoogleError(null);
     setGoogleLoading(true);
     try {
-      const { user, token } = await loginWithGoogle(credential);
-      setUser(user, token);
+      const { user } = await loginWithGoogle(credential);
+      setUser(user);
       onClose();
     } catch (err: unknown) {
       const message = err && typeof err === 'object' && 'response' in err
@@ -57,8 +57,8 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
     setLoginLoading(true);
 
     try {
-      const { user, token } = await login(loginEmail, loginPassword);
-      setUser(user, token);
+      const { user } = await login(loginEmail, loginPassword);
+      setUser(user);
       onClose();
     } catch (err: unknown) {
       const message = err && typeof err === 'object' && 'response' in err
@@ -88,8 +88,8 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
     setSignupLoading(true);
 
     try {
-      const { user, token } = await signup(signupName, signupEmail, signupPassword);
-      setUser(user, token);
+      const { user } = await signup(signupName, signupEmail, signupPassword);
+      setUser(user);
       onClose();
     } catch (err: unknown) {
       const message = err && typeof err === 'object' && 'response' in err
