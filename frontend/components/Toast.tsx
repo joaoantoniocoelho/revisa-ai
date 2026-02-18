@@ -32,7 +32,7 @@ export default function Toast({
 
   return (
     <>
-      <div className="fixed top-4 right-4 z-50 animate-slide-in-right">
+      <div className="fixed top-4 right-4 z-[70] animate-slide-in-right">
         <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 text-green-700 px-4 sm:px-6 py-3 sm:py-4 rounded-xl shadow-lg max-w-md">
           <div className="flex items-start gap-3">
             <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5 sm:mt-0" />
