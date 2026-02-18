@@ -1,7 +1,7 @@
 {
-  "name": "flashcards-backend",
+  "name": "revisa-ai-backend",
   "version": "1.0.0",
-  "description": "Backend Revisa Aí – geração de flashcards a partir de PDF",
+  "description": "Backend Revisa Aí",
   "main": "dist/server.js",
   "type": "module",
   "scripts": {
@@ -11,10 +11,8 @@
     "lint": "tsc --noEmit"
   },
   "keywords": [
-    "flashcards",
-    "anki",
-    "gemini",
-    "pdf"
+    "revisa-ai",
+    "backend"
   ],
   "author": "",
   "license": "MIT",
