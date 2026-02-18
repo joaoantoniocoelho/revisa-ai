@@ -9,7 +9,21 @@ import { toUserResponse } from '../utils/user.js';
 import { EmailService } from './EmailService.js';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
-const BACKEND_URL = process.env.BACKEND_URL ?? `http://localhost:${process.env.PORT ?? 3001}`;
+const DEFAULT_BACKEND_URL = `http://localhost:${process.env.PORT ?? 3001}`;
+
+function getBackendBaseUrl(): string {
+  const raw = (process.env.BACKEND_URL ?? DEFAULT_BACKEND_URL).trim().replace(/\/+$/, '');
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('Invalid protocol');
+    }
+    return parsed.origin;
+  } catch {
+    console.warn('[AuthService] Invalid BACKEND_URL, falling back to localhost');
+    return DEFAULT_BACKEND_URL;
+  }
+}
 
 export interface AuthServiceResult {
   user?: Record<string, unknown> & { credits?: number };
@@ -20,6 +34,7 @@ export class AuthService {
   private readonly userRepository = new UserRepository();
   private readonly creditsService = new CreditsService();
   private readonly emailService = new EmailService();
+  private readonly backendBaseUrl = getBackendBaseUrl();
 
   private async buildAuthResult(
     user: IUserDoc,
@@ -54,7 +69,7 @@ export class AuthService {
       verificationToken,
       verificationExpires
     );
-    const verifyUrl = `${BACKEND_URL}/api/auth/verify-email?token=${verificationToken}`;
+    const verifyUrl = `${this.backendBaseUrl}/api/auth/verify-email?token=${verificationToken}`;
     await this.emailService
       .sendVerificationEmail({ to: user.email, name: user.name, verifyUrl })
       .catch((err) => console.error('[AuthService] sendVerificationEmail failed:', err));
@@ -143,7 +158,7 @@ export class AuthService {
     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await this.userRepository.setVerificationToken(userId, verificationToken, verificationExpires);
 
-    const verifyUrl = `${BACKEND_URL}/api/auth/verify-email?token=${verificationToken}`;
+    const verifyUrl = `${this.backendBaseUrl}/api/auth/verify-email?token=${verificationToken}`;
     await this.emailService
       .sendVerificationEmail({ to: user.email, name: user.name, verifyUrl })
       .catch((err) => console.error('[AuthService] sendVerificationEmail failed:', err));

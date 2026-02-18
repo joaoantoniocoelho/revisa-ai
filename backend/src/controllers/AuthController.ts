@@ -4,19 +4,19 @@ import { AuthService } from '../services/AuthService.js';
 import { AUTH_COOKIE_NAME, getAuthCookieOptions } from '../config/authCookie.js';
 
 function clearAuthCookie(res: Response): void {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const opts = getAuthCookieOptions();
   res.clearCookie(AUTH_COOKIE_NAME, {
     path: '/',
     httpOnly: true,
-    sameSite: 'lax',
-    secure: isProduction,
+    sameSite: opts.sameSite,
+    secure: opts.secure,
   });
 }
 
 const DEFAULT_FRONTEND_ORIGIN = 'http://localhost:3000';
 
 function getSafeRedirectOrigin(): string {
-  const raw = process.env.FRONTEND_URL;
+  const raw = process.env.FRONTEND_URLS?.split(',')[0] ?? process.env.FRONTEND_URL;
   if (!raw || typeof raw !== 'string') return DEFAULT_FRONTEND_ORIGIN;
   try {
     const u = new URL(raw);

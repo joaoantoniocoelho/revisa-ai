@@ -1,6 +1,18 @@
-const JWT_EXPIRE = process.env.JWT_EXPIRE!;
+const JWT_EXPIRE = process.env.JWT_EXPIRE ?? '1h';
 
 export const AUTH_COOKIE_NAME = 'token';
+type SameSite = 'lax' | 'strict' | 'none';
+
+function getCookieSameSite(isProduction: boolean): SameSite {
+  const raw = (process.env.AUTH_COOKIE_SAMESITE ?? '').trim().toLowerCase();
+  if (raw === 'lax' || raw === 'strict' || raw === 'none') {
+    // Browsers require SameSite=None cookies to also be Secure.
+    if (!isProduction && raw === 'none') return 'lax';
+    return raw;
+  }
+  // Default for prod is cross-site compatible (Vercel <-> Railway); dev stays lax.
+  return isProduction ? 'none' : 'lax';
+}
 
 function getCookieMaxAgeMs(): number {
   const match = JWT_EXPIRE.match(/^(\d+)([smhd])$/);
@@ -18,10 +30,11 @@ function getCookieMaxAgeMs(): number {
 
 export function getAuthCookieOptions() {
   const isProduction = process.env.NODE_ENV === 'production';
+  const sameSite = getCookieSameSite(isProduction);
   return {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'lax' as const,
+    sameSite,
     maxAge: getCookieMaxAgeMs(),
     path: '/',
   };
