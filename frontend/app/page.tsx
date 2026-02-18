@@ -86,6 +86,8 @@ const DENSITY_OPTIONS: {
 ];
 
 export default function Home() {
+  const isMaintenanceMode =
+    process.env.NEXT_PUBLIC_APP_MAINTENANCE_MODE === "true";
   const { user, loading: authLoading, isAuthenticated, getCredits, refreshUser } =
     useUser();
   const { openLoginModal } = useAuthModal();
@@ -157,6 +159,13 @@ export default function Home() {
   };
 
   const handleGenerate = async () => {
+    if (isMaintenanceMode) {
+      showToast(
+        "Estamos em construção. Geração, login e cadastro estão temporariamente desativados.",
+        "error"
+      );
+      return;
+    }
     if (!isAuthenticated) {
       openLoginModal();
       return;

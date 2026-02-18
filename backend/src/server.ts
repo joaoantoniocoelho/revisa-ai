@@ -7,6 +7,7 @@ import { createAuthRouter } from './routes/auth.js';
 import { createDecksRouter } from './routes/decks.js';
 import { createExportRouter } from './routes/export.js';
 import { createCreditsRouter } from './routes/credits.js';
+import { createMaintenanceModeMiddleware } from './middlewares/maintenance.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -51,6 +52,7 @@ app.use(
 );
 app.use(express.json());
 app.use(cookieParser());
+app.use(createMaintenanceModeMiddleware());
 
 app.use('/api/auth', createAuthRouter());
 app.use('/api/decks', createDecksRouter());

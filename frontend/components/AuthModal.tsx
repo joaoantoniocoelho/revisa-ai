@@ -13,6 +13,10 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProps) {
+  const isMaintenanceMode =
+    process.env.NEXT_PUBLIC_APP_MAINTENANCE_MODE === "true";
+  const maintenanceMessage =
+    "Estamos em construção. Login e cadastro estão temporariamente desativados.";
   const { setUser } = useUser();
   const [isFlipping, setIsFlipping] = useState(false);
   
@@ -34,6 +38,10 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
   const [googleError, setGoogleError] = useState<string | null>(null);
 
   const handleGoogleSuccess = async (credential: string) => {
+    if (isMaintenanceMode) {
+      setGoogleError(maintenanceMessage);
+      return;
+    }
     setGoogleError(null);
     setGoogleLoading(true);
     try {
@@ -54,6 +62,10 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
+    if (isMaintenanceMode) {
+      setLoginError(maintenanceMessage);
+      return;
+    }
     setLoginLoading(true);
 
     try {
@@ -74,6 +86,10 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
   const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignupError(null);
+    if (isMaintenanceMode) {
+      setSignupError(maintenanceMessage);
+      return;
+    }
 
     if (signupPassword !== signupConfirmPassword) {
       setSignupError('As senhas não coincidem.');
@@ -161,6 +177,11 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
             </div>
 
             <div className="p-4 md:p-6">
+              {isMaintenanceMode && (
+                <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
+                  <span className="text-sm">{maintenanceMessage}</span>
+                </div>
+              )}
               {(loginError || googleError) && (
                 <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -179,6 +200,7 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
                       type="email"
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
+                      disabled={isMaintenanceMode}
                       required
                       className="w-full px-3 py-2 border border-border rounded-card focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                       placeholder="seu@email.com"
@@ -194,6 +216,7 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
                       type="password"
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
+                      disabled={isMaintenanceMode}
                       required
                       className="w-full px-3 py-2 border border-border rounded-card focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                       placeholder="••••••••"
@@ -203,7 +226,7 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
 
                 <button
                   type="submit"
-                  disabled={loginLoading}
+                  disabled={loginLoading || isMaintenanceMode}
                   className="w-full bg-primary text-white py-2.5 rounded-card font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {loginLoading ? (
@@ -227,15 +250,25 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
               </div>
 
               <div className="flex justify-center">
-                <GoogleLogin
-                  onSuccess={(res) => {
-                    if (res.credential) {
-                      handleGoogleSuccess(res.credential);
-                    }
-                  }}
-                  onError={() => setGoogleError('Não foi possível iniciar sessão com Google.')}
-                  useOneTap={false}
-                />
+                {isMaintenanceMode ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-4 py-2 rounded-card border border-border text-sm text-muted bg-gray-50 cursor-not-allowed"
+                  >
+                    Login com Google indisponível
+                  </button>
+                ) : (
+                  <GoogleLogin
+                    onSuccess={(res) => {
+                      if (res.credential) {
+                        handleGoogleSuccess(res.credential);
+                      }
+                    }}
+                    onError={() => setGoogleError('Não foi possível iniciar sessão com Google.')}
+                    useOneTap={false}
+                  />
+                )}
               </div>
 
               <div className="mt-4 text-center">
@@ -282,6 +315,11 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
             </div>
 
             <div className="p-4 md:p-6">
+              {isMaintenanceMode && (
+                <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
+                  <span className="text-sm">{maintenanceMessage}</span>
+                </div>
+              )}
               {(signupError || googleError) && (
                 <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -300,6 +338,7 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
                       type="text"
                       value={signupName}
                       onChange={(e) => setSignupName(e.target.value)}
+                      disabled={isMaintenanceMode}
                       required
                       className="w-full px-3 py-2 border border-border rounded-card focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                       placeholder="O seu nome"
@@ -315,6 +354,7 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
                       type="email"
                       value={signupEmail}
                       onChange={(e) => setSignupEmail(e.target.value)}
+                      disabled={isMaintenanceMode}
                       required
                       className="w-full px-3 py-2 border border-border rounded-card focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                       placeholder="seu@email.com"
@@ -330,6 +370,7 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
                       type="password"
                       value={signupPassword}
                       onChange={(e) => setSignupPassword(e.target.value)}
+                      disabled={isMaintenanceMode}
                       required
                       minLength={6}
                       className="w-full px-3 py-2 border border-border rounded-card focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
@@ -347,6 +388,7 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
                       type="password"
                       value={signupConfirmPassword}
                       onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                      disabled={isMaintenanceMode}
                       required
                       className="w-full px-3 py-2 border border-border rounded-card focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                       placeholder="••••••••"
@@ -356,7 +398,7 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
 
                 <button
                   type="submit"
-                  disabled={signupLoading}
+                  disabled={signupLoading || isMaintenanceMode}
                   className="w-full bg-primary text-white py-2.5 rounded-card font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {signupLoading ? (
@@ -380,15 +422,25 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
               </div>
 
               <div className="flex justify-center">
-                <GoogleLogin
-                  onSuccess={(res) => {
-                    if (res.credential) {
-                      handleGoogleSuccess(res.credential);
-                    }
-                  }}
-                  onError={() => setGoogleError('Não foi possível iniciar sessão com Google.')}
-                  useOneTap={false}
-                />
+                {isMaintenanceMode ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-4 py-2 rounded-card border border-border text-sm text-muted bg-gray-50 cursor-not-allowed"
+                  >
+                    Login com Google indisponível
+                  </button>
+                ) : (
+                  <GoogleLogin
+                    onSuccess={(res) => {
+                      if (res.credential) {
+                        handleGoogleSuccess(res.credential);
+                      }
+                    }}
+                    onError={() => setGoogleError('Não foi possível iniciar sessão com Google.')}
+                    useOneTap={false}
+                  />
+                )}
               </div>
 
               <div className="mt-4 text-center">
