@@ -1,4 +1,4 @@
-# Revisa Aí (pdf2anki)
+# Revisa Aí
 
 Revisa Aí helps students turn long PDF materials into study-ready flashcards in minutes.
 Instead of manually extracting concepts and writing cards one by one, users upload a PDF, choose a generation density, and get a deck they can review in the app or export directly to Anki (`.apkg`).
