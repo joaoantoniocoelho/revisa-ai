@@ -50,7 +50,8 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
       onClose();
     } catch (err: unknown) {
       const message = err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { error?: string } }; message?: string }).response?.data?.error
+        ? (err as { response?: { data?: { error?: string; message?: string } }; message?: string }).response?.data?.message
+          || (err as { response?: { data?: { error?: string; message?: string } }; message?: string }).response?.data?.error
           || (err as { message?: string }).message
         : 'Erro ao fazer login com Google';
       setGoogleError(String(message));
@@ -74,7 +75,8 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
       onClose();
     } catch (err: unknown) {
       const message = err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { error?: string } }; message?: string }).response?.data?.error
+        ? (err as { response?: { data?: { error?: string; message?: string } }; message?: string }).response?.data?.message
+          || (err as { response?: { data?: { error?: string; message?: string } }; message?: string }).response?.data?.error
           || (err as { message?: string }).message
         : 'Erro ao fazer login';
       setLoginError(String(message));
@@ -109,7 +111,8 @@ export default function AuthModal({ mode, onClose, onSwitchMode }: AuthModalProp
       onClose();
     } catch (err: unknown) {
       const message = err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { error?: string } }; message?: string }).response?.data?.error
+        ? (err as { response?: { data?: { error?: string; message?: string } }; message?: string }).response?.data?.message
+          || (err as { response?: { data?: { error?: string; message?: string } }; message?: string }).response?.data?.error
           || (err as { message?: string }).message
         : 'Erro ao criar conta';
       setSignupError(String(message));

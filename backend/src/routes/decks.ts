@@ -12,6 +12,11 @@ import { createCheckCreditsByPdf } from '../middlewares/checkCreditsByPdf.js';
 import { InsufficientCreditsError } from '../errors/InsufficientCreditsError.js';
 import { createCheckGenerationSlots } from '../middlewares/generationSlots.js';
 import { MAX_PDF_SIZE_MB } from '../config/pdf.js';
+import {
+  createInMemoryRateLimiter,
+  ipKey,
+  userKey,
+} from '../middlewares/rateLimit.js';
 
 const uploadsDir = path.join(process.cwd(), 'uploads', 'tmp');
 fs.mkdirSync(uploadsDir, { recursive: true });
@@ -44,11 +49,25 @@ export function createDecksRouter(): Router {
   const checkDensityAccess = createCheckDensityAccess();
   const checkCreditsByPdf = createCheckCreditsByPdf();
   const checkGenerationSlots = createCheckGenerationSlots();
+  const generateByUserLimiter = createInMemoryRateLimiter({
+    windowMs: 10 * 60 * 1000,
+    maxRequests: 5,
+    keyGenerator: userKey,
+    message: 'Too many generations in a short period. Please wait a few minutes.',
+  });
+  const generateByIpLimiter = createInMemoryRateLimiter({
+    windowMs: 10 * 60 * 1000,
+    maxRequests: 20,
+    keyGenerator: ipKey,
+    message: 'Generation rate limit reached for this IP. Please try again shortly.',
+  });
   const router = Router();
 
   router.post(
     '/generate',
     authenticate,
+    generateByUserLimiter,
+    generateByIpLimiter,
     requireEmailVerified,
     checkDensityAccess,
     checkGenerationSlots,

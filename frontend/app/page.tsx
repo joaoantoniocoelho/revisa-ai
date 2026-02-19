@@ -315,6 +315,14 @@ export default function Home() {
           );
           return;
         }
+        if (status === 429) {
+          showToast(
+            errorData?.message ??
+              "Muitas tentativas em pouco tempo. Aguarde e tente novamente.",
+            "error"
+          );
+          return;
+        }
         if (status === 500) {
           showToast(
             message ||

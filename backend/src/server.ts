@@ -8,6 +8,7 @@ import { createDecksRouter } from './routes/decks.js';
 import { createExportRouter } from './routes/export.js';
 import { createCreditsRouter } from './routes/credits.js';
 import { createMaintenanceModeMiddleware } from './middlewares/maintenance.js';
+import { createInMemoryRateLimiter, ipKey } from './middlewares/rateLimit.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -53,6 +54,15 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 app.use(createMaintenanceModeMiddleware());
+
+const globalApiLimiter = createInMemoryRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 200,
+  keyGenerator: ipKey,
+  message: 'Too many requests from this IP. Please try again later.',
+});
+
+app.use('/api', globalApiLimiter);
 
 app.use('/api/auth', createAuthRouter());
 app.use('/api/decks', createDecksRouter());
