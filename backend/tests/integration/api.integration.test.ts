@@ -61,7 +61,7 @@ describe('API integration', () => {
 
     const setCookie = response.headers['set-cookie'];
     expect(Array.isArray(setCookie)).toBe(true);
-    expect((setCookie ?? []).join(';')).toContain('FAILtoken=');
+    expect((setCookie ?? []).join(';')).toContain('token=');
   });
 
   it('POST /api/auth/login returns auth cookie', async () => {
