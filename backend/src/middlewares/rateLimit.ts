@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { rateLimit } from 'express-rate-limit';
+import { MemoryStore, rateLimit } from 'express-rate-limit';
 
 interface CreateInMemoryRateLimiterOptions {
   windowMs: number;
@@ -7,6 +7,8 @@ interface CreateInMemoryRateLimiterOptions {
   keyGenerator: (req: Request) => string | null;
   message: string;
 }
+
+const registeredStores: MemoryStore[] = [];
 
 function getRetryAfterSeconds(req: Request, fallbackWindowMs: number): number {
   const withRate = req as Request & {
@@ -45,9 +47,12 @@ export function emailKeyFromBody(req: Request): string | null {
 export function createInMemoryRateLimiter(
   options: CreateInMemoryRateLimiterOptions
 ) {
+  const store = new MemoryStore();
+  registeredStores.push(store);
   return rateLimit({
     windowMs: options.windowMs,
     limit: options.maxRequests,
+    store,
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) => !options.keyGenerator(req),
@@ -63,4 +68,8 @@ export function createInMemoryRateLimiter(
       });
     },
   });
+}
+
+export async function resetRateLimitStoresForTests(): Promise<void> {
+  await Promise.all(registeredStores.map((store) => store.resetAll()));
 }
