@@ -18,6 +18,7 @@ function escapeHtml(s: string): string {
 export class EmailService {
   private readonly resendApiKey = process.env.RESEND_API_KEY;
   private readonly fromEmail = process.env.FROM_EMAIL ?? '';
+  private readonly supportEmail = 'revisaai.app@gmail.com';
 
   async sendVerificationEmail(params: SendVerificationEmailParams): Promise<void> {
     const { to, name, verifyUrl } = params;
@@ -61,6 +62,8 @@ export class EmailService {
         'Confirme seu email para liberar a geração de flashcards.',
         '',
         `Link: ${finalVerifyUrl}`,
+        '',
+        `Dúvidas? Fale com a gente: ${this.supportEmail}`,
         '',
         'Se você não criou uma conta, pode ignorar este email.',
       ].join('\n'),
@@ -121,6 +124,9 @@ export class EmailService {
 
                         <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;">
                           Se você não criou uma conta, pode ignorar este email.
+                        </p>
+                        <p style="margin:12px 0 0;font-size:13px;line-height:1.6;color:#64748b;">
+                          Dúvidas? <a href="mailto:${this.supportEmail}" style="color:#2563eb;text-decoration:underline;">${this.supportEmail}</a>
                         </p>
                       </td>
                     </tr>

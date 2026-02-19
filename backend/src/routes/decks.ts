@@ -11,6 +11,7 @@ import { createCheckDensityAccess } from '../middlewares/checkLimits.js';
 import { createCheckCreditsByPdf } from '../middlewares/checkCreditsByPdf.js';
 import { InsufficientCreditsError } from '../errors/InsufficientCreditsError.js';
 import { createCheckGenerationSlots } from '../middlewares/generationSlots.js';
+import { MAX_PDF_SIZE_MB } from '../config/pdf.js';
 
 const uploadsDir = path.join(process.cwd(), 'uploads', 'tmp');
 fs.mkdirSync(uploadsDir, { recursive: true });
@@ -26,7 +27,7 @@ const upload = multer({
       cb(null, unique);
     },
   }),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: MAX_PDF_SIZE_MB * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype !== 'application/pdf') {
       cb(new Error('File must be a PDF'));
@@ -88,7 +89,7 @@ export function createDecksRouter(): Router {
       }
       if (error instanceof multer.MulterError) {
         if (error.code === 'LIMIT_FILE_SIZE') {
-          res.status(400).json({ error: 'PDF must be smaller than 10MB' });
+          res.status(400).json({ error: `PDF must be smaller than ${MAX_PDF_SIZE_MB}MB` });
           return;
         }
         res.status(400).json({ error: error.message });

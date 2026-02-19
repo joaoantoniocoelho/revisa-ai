@@ -3,6 +3,8 @@ import type { Request, Response, NextFunction } from 'express';
 import { PDFDocument } from 'pdf-lib';
 import { CreditsService } from '../services/CreditsService.js';
 import { InsufficientCreditsError } from '../errors/InsufficientCreditsError.js';
+import type { Density } from '../types/index.js';
+import { MAX_PDF_PAGES } from '../config/pdf.js';
 
 const creditsService = new CreditsService();
 
@@ -18,15 +20,36 @@ export function createCheckCreditsByPdf() {
       const buffer = await fs.promises.readFile(file.path);
       const doc = await PDFDocument.load(buffer);
       const numPages = doc.getPageCount() || 1;
+      if (numPages > MAX_PDF_PAGES) {
+        try {
+          await fs.promises.unlink(file.path);
+        } catch {
+          /* ignore temp file cleanup errors */
+        }
+        res.status(400).json({
+          error: `PDF must have at most ${MAX_PDF_PAGES} pages`,
+        });
+        return;
+      }
 
-      const creditsRequired = creditsService.getCreditsForPages(numPages);
+      const requestedDensity =
+        ((req.body as { density?: string } | undefined)?.density ??
+          (req.query?.density as string | undefined) ??
+          'low')
+          .toLowerCase()
+          .trim() as Density;
+
+      const creditsRequired = creditsService.getCreditsForGeneration(
+        numPages,
+        requestedDensity
+      );
       const userId = req.user!._id.toString();
       const { success } = await creditsService.tryDebitCredits(userId, creditsRequired);
 
       if (!success) {
         const creditsAvailable = await creditsService.getCredits(req.user!);
         throw new InsufficientCreditsError(
-          `This generation requires ${creditsRequired} credits (${numPages} page${numPages !== 1 ? 's' : ''}). You have ${creditsAvailable} credits.`,
+          `This generation requires ${creditsRequired} credits (${numPages} page${numPages !== 1 ? 's' : ''}, density: ${requestedDensity}). You have ${creditsAvailable} credits.`,
           creditsRequired,
           creditsAvailable
         );

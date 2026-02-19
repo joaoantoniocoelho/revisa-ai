@@ -14,8 +14,13 @@ import {
   Trash2,
   AlertCircle,
   Loader2,
-  Download,
   Info,
+  ArrowRight,
+  ShieldCheck,
+  Lock,
+  BrainCircuit,
+  Zap,
+  BookOpenCheck,
 } from "lucide-react";
 import Header from "@/components/Header";
 import { useUser } from "@/contexts/UserContext";
@@ -26,7 +31,12 @@ import { useCreditsModal } from "@/hooks/useCreditsModal";
 import CreditsModal from "@/components/CreditsModal";
 import { useAuthModal } from "@/contexts/AuthModalContext";
 import FlashcardViewer from "@/components/FlashcardViewer";
-import { fetchCreditsConfig } from "@/lib/credits";
+import {
+  fetchCreditsConfig,
+  fetchCreditsEstimate,
+  type CreditsConfig,
+  type CreditsEstimate,
+} from "@/lib/credits";
 
 interface Flashcard {
   front: string;
@@ -64,24 +74,30 @@ const DENSITY_OPTIONS: {
   label: string;
   cards: string;
   description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  recommended?: boolean;
 }[] = [
   {
     value: "low",
     label: "Baixa",
     cards: "~20",
     description: "Resumos e conceitos principais. Ideal para visão geral.",
+    icon: Zap,
   },
   {
     value: "medium",
     label: "Média",
     cards: "~35",
     description: "Equilíbrio entre quantidade e foco. Estudo regular.",
+    icon: Target,
+    recommended: true,
   },
   {
     value: "high",
     label: "Alta",
     cards: "~60",
     description: "Maior cobertura. Recomendado para provas e conteúdo denso.",
+    icon: BookOpenCheck,
   },
 ];
 
@@ -93,7 +109,7 @@ export default function Home() {
   const { openLoginModal } = useAuthModal();
 
   const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [density, setDensity] = useState<Density>("low");
+  const [density, setDensity] = useState<Density>("medium");
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
@@ -102,9 +118,9 @@ export default function Home() {
   const [exporting, setExporting] = useState(false);
   const [deckId, setDeckId] = useState<string | null>(null);
   const cardsContainerRef = useRef<HTMLDivElement>(null);
-  const [creditsConfig, setCreditsConfig] = useState<{
-    creditsPerPage: number;
-  } | null>(null);
+  const [creditsConfig, setCreditsConfig] = useState<CreditsConfig | null>(null);
+  const [creditsEstimate, setCreditsEstimate] = useState<CreditsEstimate | null>(null);
+  const [estimateLoading, setEstimateLoading] = useState(false);
 
   const { toasts, showToast, removeToast } = useToast();
   const {
@@ -118,6 +134,31 @@ export default function Home() {
   useEffect(() => {
     fetchCreditsConfig().then((cfg) => setCreditsConfig(cfg)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!pdfFile) {
+      setCreditsEstimate(null);
+      setEstimateLoading(false);
+      return;
+    }
+
+    setEstimateLoading(true);
+    fetchCreditsEstimate(pdfFile, density)
+      .then((estimate) => {
+        if (!cancelled) setCreditsEstimate(estimate);
+      })
+      .catch(() => {
+        if (!cancelled) setCreditsEstimate(null);
+      })
+      .finally(() => {
+        if (!cancelled) setEstimateLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfFile, density]);
 
   useEffect(() => {
     if (!loading) {
@@ -166,12 +207,19 @@ export default function Home() {
       );
       return;
     }
+    if (!pdfFile) {
+      showToast("Faça upload de um PDF para continuar.", "error");
+      return;
+    }
     if (!isAuthenticated) {
       openLoginModal();
       return;
     }
-    if (!pdfFile) {
-      showToast("Selecione um PDF para continuar.", "error");
+    if (user?.emailVerified === false) {
+      showToast(
+        "Confirme seu email para gerar decks. Use o banner acima para reenviar o email.",
+        "error"
+      );
       return;
     }
 
@@ -328,6 +376,10 @@ export default function Home() {
   };
 
   const CurrentStepIcon = loadingSteps[stepIndex]?.icon ?? Loader2;
+  const selectedMultiplier = creditsConfig?.densityMultipliers?.[density] ?? 1;
+  const estimatedPerPage = Math.ceil(
+    (creditsConfig?.creditsPerPageBase ?? 1) * selectedMultiplier
+  );
 
   if (authLoading) {
     return (
@@ -349,18 +401,49 @@ export default function Home() {
         message={modalMessage}
       />
       <Header />
-      <main className="min-h-screen bg-surface py-8 md:py-12 px-4 pb-28 md:pb-12">
-        <div className="max-w-2xl mx-auto space-y-8">
+      <main className="min-h-screen bg-gradient-to-b from-slate-50 via-surface to-slate-100/50 py-8 md:py-12 px-4 pb-28 md:pb-12">
+        <div className="max-w-3xl mx-auto space-y-8 animate-fade-in-up">
           {/* Headline */}
-          <div className="text-center space-y-2">
-            <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900">
+          <section className="text-center space-y-5">
+            <div className="space-y-3">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-tight text-slate-900">
               PDF para flashcards em segundos
-            </h1>
-            <p className="text-muted text-sm sm:text-base max-w-md mx-auto">
-              Envie um PDF e receba um deck compatível com Anki. A IA extrai o
-              conteúdo e gera os cartões automaticamente para você.
-            </p>
-          </div>
+              </h1>
+              <p className="text-slate-600 text-sm sm:text-base max-w-xl mx-auto">
+                Envie um PDF e receba um deck compatível com Anki. A IA extrai o
+                conteúdo e gera os cartões automaticamente para você.
+              </p>
+            </div>
+
+            <div className="mx-auto max-w-2xl rounded-card-lg border border-primary/15 bg-gradient-to-r from-primary-muted/50 via-white to-primary-muted/30 p-4 sm:p-5 shadow-card">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-4">
+                <div className="rounded-card border border-border bg-white p-3 sm:p-4">
+                  <div className="flex items-center gap-2 text-slate-700">
+                    <FileText className="w-5 h-5 text-primary" />
+                    <span className="text-sm font-medium">Seu PDF</span>
+                  </div>
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100" />
+                  <div className="mt-2 h-1.5 w-4/5 rounded-full bg-slate-100" />
+                  <div className="mt-2 h-1.5 w-3/5 rounded-full bg-slate-100" />
+                </div>
+                <ArrowRight className="w-5 h-5 text-primary/70" />
+                <div className="rounded-card border border-primary/20 bg-white p-3 sm:p-4 shadow-sm">
+                  <div className="flex items-center gap-2 text-slate-700">
+                    <Sparkles className="w-5 h-5 text-primary" />
+                    <span className="text-sm font-medium">Flashcards prontos</span>
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600">
+                      O que é fotossíntese?
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600">
+                      Função da mitocôndria
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
 
           {/* Credits */}
           {isAuthenticated && (
@@ -372,9 +455,10 @@ export default function Home() {
                   </p>
                   <p className="text-xs text-muted mt-0.5">
                     {credits} crédito{credits !== 1 ? "s" : ""}. Cada página do
-                    PDF consome{" "}
-                    {creditsConfig?.creditsPerPage ?? 1} crédito
-                    {(creditsConfig?.creditsPerPage ?? 1) !== 1 ? "s" : ""}.
+                    PDF consome a partir de{" "}
+                    {creditsConfig?.creditsPerPageBase ?? 1} crédito
+                    {(creditsConfig?.creditsPerPageBase ?? 1) !== 1 ? "s" : ""}{" "}
+                    (varia por densidade).
                   </p>
                 </div>
                 <div className="text-2xl font-semibold text-gray-900 flex items-center gap-1">
@@ -392,7 +476,7 @@ export default function Home() {
           )}
 
           {/* Upload */}
-          <div className="bg-white rounded-card-lg border border-border shadow-card p-5 sm:p-6 space-y-6">
+          <div className="bg-white/95 backdrop-blur rounded-card-lg border border-border shadow-card p-5 sm:p-6 space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">
                 Arquivo PDF
@@ -406,18 +490,20 @@ export default function Home() {
               />
               <label
                 htmlFor="pdf-upload"
-                className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full px-6 py-8 bg-surface border-2 border-dashed border-border-strong rounded-card cursor-pointer hover:border-primary hover:bg-primary-muted/30 transition-colors"
+                className="group flex flex-col sm:flex-row items-center justify-center gap-3 w-full px-6 py-9 bg-primary-muted/25 border-2 border-dashed border-primary/40 rounded-card cursor-pointer hover:border-primary hover:bg-primary-muted/45 active:scale-[0.995] transition-all duration-200"
               >
-                <Upload className="w-8 h-8 text-muted" />
-                <span className="text-sm font-medium text-gray-700 text-center">
+                <Upload className="w-8 h-8 text-primary/80 group-hover:text-primary transition-colors" />
+                <span className="text-sm font-medium text-slate-800 text-center">
                   {pdfFile
                     ? pdfFile.name
-                    : "Clique para escolher ou arraste o PDF aqui"}
+                    : "Arraste seu PDF aqui ou clique para gerar seus flashcards"}
                 </span>
               </label>
-              <p className="text-xs text-muted mt-2">
-                Máximo 10 MB. O arquivo é processado de forma segura e não é
-                compartilhado.
+              <p className="text-xs text-slate-500 mt-2">
+                Processamento rápido e seguro.
+              </p>
+              <p className="text-xs text-muted mt-1">
+                Máximo 10 MB e {creditsConfig?.maxPdfPages ?? 50} páginas. O arquivo não é compartilhado.
               </p>
             </div>
 
@@ -429,21 +515,30 @@ export default function Home() {
               <div className="space-y-3">
                 {DENSITY_OPTIONS.map((opt) => {
                   const isSelected = density === opt.value;
+                  const Icon = opt.icon;
                   return (
                     <button
                       key={opt.value}
                       type="button"
                       onClick={() => setDensity(opt.value)}
-                      className={`w-full text-left px-4 py-3 rounded-card border-2 transition-all ${
+                      className={`w-full text-left px-4 py-3 rounded-card border-2 transition-all duration-200 hover:shadow-sm ${
                         isSelected
-                          ? "border-primary bg-primary-muted"
-                          : "border-border bg-white hover:border-border-strong"
+                          ? "border-primary bg-primary-muted/60 shadow-md scale-[1.02]"
+                          : "border-border bg-white hover:border-primary/40 hover:bg-slate-50"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-gray-900">
-                          {opt.label}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <Icon className={`w-4 h-4 ${isSelected ? "text-primary" : "text-slate-500"}`} />
+                          <span className="font-medium text-gray-900">
+                            {opt.label}
+                          </span>
+                          {opt.recommended && (
+                            <span className="text-[11px] font-medium text-primary bg-primary-muted px-2 py-0.5 rounded-full border border-primary/20">
+                              Mais escolhida
+                            </span>
+                          )}
+                        </div>
                         <span className="text-sm text-muted">{opt.cards} cartões</span>
                       </div>
                       <p className="text-xs text-muted mt-1">{opt.description}</p>
@@ -453,8 +548,39 @@ export default function Home() {
               </div>
               {creditsConfig && (
                 <p className="text-xs text-muted mt-2">
-                  Custo: {creditsConfig.creditsPerPage} crédito
-                  {creditsConfig.creditsPerPage !== 1 ? "s" : ""} por página.
+                  Custo estimado ({DENSITY_OPTIONS.find((d) => d.value === density)?.label}):{" "}
+                  {estimatedPerPage} crédito
+                  {estimatedPerPage !== 1 ? "s" : ""} por página.
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-card border border-slate-200 bg-slate-50/80 px-3 py-2">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                <span className="inline-flex items-center gap-1.5">
+                  <CheckCircle2
+                    className={`w-3.5 h-3.5 ${
+                      pdfFile ? "text-emerald-600" : "text-slate-400"
+                    }`}
+                  />
+                  PDF selecionado
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  Quantidade definida
+                </span>
+              </div>
+              {pdfFile && (
+                <p className="mt-2 text-xs text-slate-600">
+                  {estimateLoading
+                    ? "Calculando custo..."
+                    : creditsEstimate
+                    ? `Esta geração vai custar ${creditsEstimate.creditsRequired} crédito${
+                        creditsEstimate.creditsRequired !== 1 ? "s" : ""
+                      } (${creditsEstimate.numPages} página${
+                        creditsEstimate.numPages !== 1 ? "s" : ""
+                      }).`
+                    : "Não foi possível calcular o custo deste PDF agora."}
                 </p>
               )}
             </div>
@@ -462,27 +588,51 @@ export default function Home() {
             <button
               type="button"
               onClick={handleGenerate}
-              disabled={!pdfFile || loading || (!!user && user.emailVerified === false)}
-              className="w-full py-3 bg-primary text-white text-sm font-medium rounded-card hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              disabled={loading}
+              className="w-full py-3 bg-blue-600 text-white text-sm font-semibold rounded-card hover:brightness-105 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
             >
               <Sparkles className="w-4 h-4" />
-              {loading ? "A gerar..." : user?.emailVerified === false ? "Confirme seu email para gerar" : "Gerar flashcards"}
+              {loading ? "A gerar..." : "Gerar flashcards"}
             </button>
+            <p className="text-xs text-slate-500/90 text-center -mt-1">
+              Leva menos de 30 segundos
+            </p>
             {user?.emailVerified === false && (
               <p className="text-xs text-amber-600 text-center -mt-2">
                 Verifique sua caixa de entrada e clique no link enviado, ou use &quot;Reenviar email&quot; no banner acima.
               </p>
             )}
 
-            <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-card">
-              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div className="text-xs text-amber-800 leading-relaxed">
+            <div className="flex items-start gap-2.5 p-3 bg-amber-50/45 border border-amber-100 rounded-card">
+              <AlertCircle className="w-4 h-4 text-amber-700/80 flex-shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-900/80 leading-relaxed">
                 <span className="font-medium">Conteúdo gerado por IA.</span>{" "}
                 Revise os cartões antes de usar em estudo. Podem existir
                 imprecisões.
               </div>
             </div>
           </div>
+
+          <section className="rounded-card-lg border border-border bg-white/90 backdrop-blur px-4 py-3 shadow-card">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <CheckCircle2 className="w-4 h-4 text-slate-500" />
+                <span>Compatível com Anki</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <Lock className="w-4 h-4 text-slate-500" />
+                <span>Arquivos não são armazenados</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <ShieldCheck className="w-4 h-4 text-slate-500" />
+                <span>Processamento seguro</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <BrainCircuit className="w-4 h-4 text-slate-500" />
+                <span>Geração automática com IA</span>
+              </div>
+            </div>
+          </section>
 
           {/* Result */}
           {cards.length > 0 && !loading && (
@@ -510,6 +660,18 @@ Para usar no Anki: baixe o arquivo .apkg acima e importe em
               </div>
             </div>
           )}
+
+          <footer className="pt-2 pb-1 text-center">
+            <p className="text-xs text-slate-500">
+              Suporte:{" "}
+              <a
+                href="mailto:revisaai.app@gmail.com"
+                className="text-primary hover:underline"
+              >
+                revisaai.app@gmail.com
+              </a>
+            </p>
+          </footer>
         </div>
       </main>
 

@@ -1,12 +1,13 @@
 import type { IUserDoc } from '../models/User.js';
 import { UserRepository } from '../repositories/UserRepository.js';
-import { getCreditsForPages } from '../config/credits.js';
+import { getCreditsForGeneration } from '../config/credits.js';
+import type { Density } from '../types/index.js';
 
 export class CreditsService {
   private readonly userRepository = new UserRepository();
 
-  getCreditsForPages(numPages: number): number {
-    return getCreditsForPages(numPages);
+  getCreditsForGeneration(numPages: number, density: Density): number {
+    return getCreditsForGeneration(numPages, density);
   }
 
   async getCredits(user: IUserDoc): Promise<number> {
