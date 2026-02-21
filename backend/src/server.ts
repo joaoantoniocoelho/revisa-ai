@@ -10,4 +10,6 @@ if (!shouldSkipDbConnection) {
 }
 const app = createApp();
 
-app.listen(PORT);
+app.listen(PORT, () => {
+  console.log(`[Server] API running on port ${PORT} — env: ${process.env.NODE_ENV ?? 'development'}`);
+});

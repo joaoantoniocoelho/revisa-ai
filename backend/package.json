@@ -20,6 +20,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
     "anki-apkg-export": "^4.0.1",
+    "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
