@@ -1,0 +1,136 @@
+import type { Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
+import fs from 'fs';
+import multer from 'multer';
+import path from 'path';
+import { DeckController } from './controllers/DeckController.js';
+import { CreditsService } from '../credits/services/CreditsService.js';
+import { createAuthenticate } from '../../shared/middlewares/auth.js';
+import { requireEmailVerified } from './middlewares/requireEmailVerified.js';
+import { createCheckCreditsByPdf } from './middlewares/checkCreditsByPdf.js';
+import { InsufficientCreditsError } from '../../shared/errors/InsufficientCreditsError.js';
+import { createCheckGenerationSlots } from './middlewares/generationSlots.js';
+import {
+  createInMemoryRateLimiter,
+  ipKey,
+  userKey,
+} from '../../shared/middlewares/rateLimit.js';
+
+const MAX_PDF_SIZE_MB = 10;
+
+const uploadsDir = path.join(process.cwd(), 'uploads', 'tmp');
+fs.mkdirSync(uploadsDir, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadsDir),
+    filename: (_req, file, cb) => {
+      const safe = Buffer.from(file.originalname, 'latin1')
+        .toString('utf8')
+        .replace(/[^a-zA-Z0-9._-]/g, '_');
+      const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}-${safe}`;
+      cb(null, unique);
+    },
+  }),
+  limits: { fileSize: MAX_PDF_SIZE_MB * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype !== 'application/pdf') {
+      cb(new Error('File must be a PDF'));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+export function createDecksRouter(): Router {
+  const deckController = new DeckController();
+  const creditsService = new CreditsService();
+  const authenticate = createAuthenticate();
+  const checkCreditsByPdf = createCheckCreditsByPdf();
+  const checkGenerationSlots = createCheckGenerationSlots();
+  const generateByUserLimiter = createInMemoryRateLimiter({
+    windowMs: 10 * 60 * 1000,
+    maxRequests: 5,
+    keyGenerator: userKey,
+    message: 'Too many generations in a short period. Please wait a few minutes.',
+  });
+  const generateByIpLimiter = createInMemoryRateLimiter({
+    windowMs: 10 * 60 * 1000,
+    maxRequests: 20,
+    keyGenerator: ipKey,
+    message: 'Generation rate limit reached for this IP. Please try again shortly.',
+  });
+  const router = Router();
+
+  router.post(
+    '/generate',
+    authenticate,
+    generateByUserLimiter,
+    generateByIpLimiter,
+    requireEmailVerified,
+    checkGenerationSlots,
+    upload.single('pdf'),
+    checkCreditsByPdf,
+    deckController.generate
+  );
+  router.get('/', authenticate, deckController.getDecks);
+  router.get('/:deckId', authenticate, deckController.getDeck);
+  router.patch('/:deckId', authenticate, deckController.updateDeck);
+  router.delete('/:deckId', authenticate, deckController.deleteDeck);
+
+  router.use(
+    async (
+      error: unknown,
+      req: Request,
+      res: Response,
+      _next: NextFunction
+    ): Promise<void> => {
+      req.releaseUserSlot?.();
+      if (req.creditsConsumed && req.creditsAmount != null && req.user?._id) {
+        try {
+          await creditsService.refundCredits(
+            req.user._id.toString(),
+            req.creditsAmount
+          );
+        } catch {
+          /* ignore */
+        }
+      }
+      const file = req.file as { path?: string } | undefined;
+      if (file?.path) {
+        try {
+          await fs.promises.unlink(file.path);
+        } catch {
+          /* ignore */
+        }
+      }
+      if (error instanceof multer.MulterError) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+          res.status(400).json({ error: `PDF must be smaller than ${MAX_PDF_SIZE_MB}MB` });
+          return;
+        }
+        res.status(400).json({ error: error.message });
+        return;
+      }
+      if (error instanceof Error && error.message === 'File must be a PDF') {
+        res.status(400).json({ error: 'File must be a PDF' });
+        return;
+      }
+      if (error instanceof InsufficientCreditsError) {
+        res.status(402).json({
+          error: 'Insufficient credits',
+          message: error.message,
+          creditsRequired: error.creditsRequired,
+          creditsAvailable: error.creditsAvailable,
+        });
+        return;
+      }
+      console.error('Deck route error:', error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : 'Internal server error',
+      });
+    }
+  );
+
+  return router;
+}

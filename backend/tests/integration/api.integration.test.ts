@@ -17,7 +17,7 @@ beforeAll(async () => {
   process.env.TRUST_PROXY = '1';
 
   const appMod = await import('../../src/app.ts');
-  const rateLimitMod = await import('../../src/middlewares/rateLimit.ts');
+  const rateLimitMod = await import('../../src/shared/middlewares/rateLimit.ts');
   app = appMod.createApp();
   resetRateLimitStoresForTests = rateLimitMod.resetRateLimitStoresForTests;
 
