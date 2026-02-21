@@ -1,12 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { createAuthRouter } from './routes/auth.js';
-import { createDecksRouter } from './routes/decks.js';
-import { createExportRouter } from './routes/export.js';
-import { createCreditsRouter } from './routes/credits.js';
-import { createMaintenanceModeMiddleware } from './middlewares/maintenance.js';
-import { createInMemoryRateLimiter, ipKey } from './middlewares/rateLimit.js';
+import { createAuthRouter } from './domains/auth/routes.js';
+import { createDecksRouter } from './domains/decks/routes.js';
+import { createExportRouter } from './domains/decks/export/routes.js';
+import { createCreditsRouter } from './domains/credits/routes.js';
+import { createMaintenanceModeMiddleware } from './shared/middlewares/maintenance.js';
+import { createInMemoryRateLimiter, ipKey } from './shared/middlewares/rateLimit.js';
 
 const DEFAULT_FRONTEND_URL = 'http://localhost:3000';
 
