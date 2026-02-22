@@ -1,60 +1,95 @@
-import mongoose from "mongoose";
-import { PaymentModel, type IPaymentDoc, type PaymentStatus, PAYMENT_STATUS_ORDER } from "../models/Payment.js";
-import { UserModel } from "../../auth/models/User.js";
+import mongoose from 'mongoose';
+import { PaymentModel, type IPaymentDoc, type IPixData, type PaymentStatus } from '../models/Payment.js';
+import { UserModel } from '../../auth/models/User.js';
+
+export type CreatePaymentInput = Omit<IPaymentDoc, '_id' | 'createdAt' | 'updatedAt'>;
+
+const TERMINAL: ReadonlySet<PaymentStatus> = new Set(['approved', 'canceled', 'rejected']);
 
 export class PaymentRepository {
-    async create(data: IPaymentDoc): Promise<IPaymentDoc> {
-        const payment = await PaymentModel.create(data);
-        return payment as unknown as IPaymentDoc;
-    }
+  async create(data: CreatePaymentInput): Promise<IPaymentDoc> {
+    const payment = await PaymentModel.create(data);
+    return payment;
+  }
 
-    async findByGatewayAndExternalId(gateway: string, externalId: string): Promise<IPaymentDoc | null> {
-        const doc = await PaymentModel.findOne({ gateway, externalReference: externalId });
-        return doc ?? null;
-    }
+  async findByIdempotencyKey(idempotencyKey: string): Promise<IPaymentDoc | null> {
+    return (await PaymentModel.findOne({ idempotencyKey })) ?? null;
+  }
 
-    async updateStatus(id: string, status: PaymentStatus): Promise<IPaymentDoc | null> {
-        const incomingOrder = PAYMENT_STATUS_ORDER[status];
-        const allowedCurrentStatuses = (Object.keys(PAYMENT_STATUS_ORDER) as PaymentStatus[]).filter(
-            (s) => PAYMENT_STATUS_ORDER[s] < incomingOrder
-        );
-        const doc = await PaymentModel.findOneAndUpdate(
-            { _id: id, status: { $in: allowedCurrentStatuses } },
-            { status },
-            { new: true }
-        );
-        return doc ?? null;
-    }
+  async findByGatewayAndExternalId(
+    gateway: 'mercadopago',
+    externalId: string
+  ): Promise<IPaymentDoc | null> {
+    return (await PaymentModel.findOne({ gateway, externalReference: externalId })) ?? null;
+  }
 
-    async applyCredits(gateway: string, externalReference: string): Promise<IPaymentDoc | null> {
-        const session = await mongoose.startSession();
-        let result: IPaymentDoc | null = null;
+  async linkGatewayPayment(id: string, externalReference: string, pixData: IPixData): Promise<void> {
+    await PaymentModel.updateOne(
+      { _id: id },
+      {
+        $set: {
+          externalReference,
+          pixData,
+          status: 'pending',
+        },
+        $unset: { gatewayError: '' },
+      }
+    );
+  }
 
-        await session.withTransaction(async () => {
-            const payment = await PaymentModel.findOne(
-                { gateway, externalReference },
-                null,
-                { session }
-            );
+  async markGatewayError(id: string, errorMessage: string): Promise<void> {
+    await PaymentModel.updateOne(
+      { _id: id, status: { $nin: [...TERMINAL] } },
+      { $set: { status: 'gateway_error', gatewayError: errorMessage } }
+    );
+  }
 
-            if (!payment || payment.creditsApplied) {
-                return;
-            }
+  async updateStatus(
+    gateway: 'mercadopago',
+    externalReference: string,
+    status: PaymentStatus
+  ): Promise<void> {
+  
+    await PaymentModel.updateOne(
+      {
+        gateway,
+        externalReference,
+        status: { $nin: ['approved', 'rejected', 'canceled'] },
+      },
+      {
+        $set: { status },
+        ...(status === 'approved' ? { paidAt: new Date() } : {}),
+      }
+    );
+  }
 
-            await UserModel.findByIdAndUpdate(
-                payment.userId,
-                { $inc: { credits: payment.creditsToAdd } },
-                { session }
-            );
+  async applyCredits(gateway: 'mercadopago', externalReference: string): Promise<IPaymentDoc | null> {
+    const session = await mongoose.startSession();
+    let result: IPaymentDoc | null = null;
 
-            result = await PaymentModel.findByIdAndUpdate(
-                payment._id,
-                { creditsApplied: true, creditedAt: new Date() },
-                { new: true, session }
-            );
-        });
+    await session.withTransaction(async () => {
+      const payment = await PaymentModel.findOne(
+        { gateway, externalReference },
+        null,
+        { session }
+      );
 
-        await session.endSession();
-        return result;
-    }
+      if (!payment || payment.creditsApplied) return;
+
+      await UserModel.findByIdAndUpdate(
+        payment.userId,
+        { $inc: { credits: payment.creditsToAdd } },
+        { session }
+      );
+
+      result = await PaymentModel.findByIdAndUpdate(
+        payment._id,
+        { $set: { creditsApplied: true, creditedAt: new Date() } },
+        { new: true, session }
+      );
+    });
+
+    await session.endSession();
+    return result;
+  }
 }

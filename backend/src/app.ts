@@ -5,6 +5,7 @@ import { createAuthRouter } from './domains/auth/routes.js';
 import { createDecksRouter } from './domains/decks/routes.js';
 import { createExportRouter } from './domains/decks/export/routes.js';
 import { createCreditsRouter } from './domains/credits/routes.js';
+import { createBillingRouter } from './domains/billing/routes.js';
 import { createMaintenanceModeMiddleware } from './shared/middlewares/maintenance.js';
 import { createInMemoryRateLimiter, ipKey } from './shared/middlewares/rateLimit.js';
 
@@ -68,6 +69,7 @@ export function createApp(): express.Express {
   app.use('/api/decks', createDecksRouter());
   app.use('/api/export', createExportRouter());
   app.use('/api/credits', createCreditsRouter());
+  app.use('/api/billing', createBillingRouter());
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', message: 'Backend is running' });

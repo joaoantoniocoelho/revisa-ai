@@ -1,13 +1,17 @@
 import mongoose, { type Model } from 'mongoose';
 
-export type PaymentStatus = 'pending' | 'approved' | 'canceled' | 'rejected';
+export type PaymentStatus =
+  | 'pending'
+  | 'approved'
+  | 'canceled'
+  | 'rejected'
+  | 'gateway_error';
 
-export const PAYMENT_STATUS_ORDER: Record<PaymentStatus, number> = {
-  pending: 0,
-  approved: 1,
-  canceled: 1,
-  rejected: 1,
-};
+export interface IPixData {
+  qrCode: string;
+  qrCodeBase64?: string;
+  ticketUrl?: string;
+}
 
 export interface IPaymentDoc {
   _id: mongoose.Types.ObjectId;
@@ -16,9 +20,12 @@ export interface IPaymentDoc {
   amountCents: number;
   creditsToAdd: number;
   gateway: 'mercadopago';
-  externalReference: string;
+  externalReference?: string;
+  idempotencyKey: string;
   status: PaymentStatus;
   creditsApplied: boolean;
+  gatewayError?: string;
+  pixData?: IPixData;
   paidAt?: Date;
   creditedAt?: Date;
   createdAt?: Date;
@@ -53,35 +60,57 @@ const paymentSchema = new mongoose.Schema<IPaymentDoc>(
       enum: ['mercadopago'],
       default: 'mercadopago',
     },
+
     externalReference: {
       type: String,
-      required: [true, 'externalReference is required'],
+      required: false,
       trim: true,
     },
+
+    idempotencyKey: {
+      type: String,
+      required: [true, 'idempotencyKey is required'],
+      trim: true,
+    },
+
     status: {
       type: String,
       required: true,
-      enum: ['pending', 'approved', 'canceled', 'rejected'] satisfies PaymentStatus[],
+      enum: ['pending', 'approved', 'canceled', 'rejected', 'gateway_error'] satisfies PaymentStatus[],
       default: 'pending',
     },
+
     creditsApplied: {
       type: Boolean,
       required: true,
       default: false,
     },
-    paidAt: {
-      type: Date,
+
+    gatewayError: {
+      type: String,
       required: false,
     },
-    creditedAt: {
-      type: Date,
+
+    pixData: {
+      type: {
+        qrCode: { type: String, required: true },
+        qrCodeBase64: { type: String, required: false },
+        ticketUrl: { type: String, required: false },
+      },
       required: false,
+      _id: false,
     },
+
+    paidAt: { type: Date, required: false },
+    creditedAt: { type: Date, required: false },
   },
   { timestamps: true }
 );
 
-paymentSchema.index({ gateway: 1, externalReference: 1 }, { unique: true });
+paymentSchema.index({ gateway: 1, externalReference: 1 }, { unique: true, sparse: true });
+
+paymentSchema.index({ idempotencyKey: 1 }, { unique: true });
+
 paymentSchema.index({ userId: 1, createdAt: -1 });
 paymentSchema.index({ status: 1, creditsApplied: 1 });
 
