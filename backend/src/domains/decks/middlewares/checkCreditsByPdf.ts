@@ -6,7 +6,7 @@ import { InsufficientCreditsError } from '../../../shared/errors/InsufficientCre
 import type { Density } from '../../../shared/types/index.js';
 
 const creditsService = new CreditsService();
-const MAX_PDF_PAGES = 50;
+const MAX_PDF_PAGES = 30;
 
 export function createCheckCreditsByPdf() {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
