@@ -98,6 +98,10 @@ export async function generateFlashcards(
     const response = await withTimeout(
       (async () => {
         const result = await model.generateContent(prompt);
+        const usage = result.response.usageMetadata;
+        console.log(
+          `[Gemini] tokens — input: ${usage?.promptTokenCount ?? '?'}, output: ${usage?.candidatesTokenCount ?? '?'}, total: ${usage?.totalTokenCount ?? '?'}`
+        );
         return result.response;
       })(),
       LLM_TIMEOUT_MS
