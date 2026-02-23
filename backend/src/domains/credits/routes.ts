@@ -11,7 +11,7 @@ import {
 import type { Density } from '../../shared/types/index.js';
 
 const MAX_PDF_SIZE_MB = 10;
-const MAX_PDF_PAGES = 50;
+const MAX_PDF_PAGES = 30;
 
 export function createCreditsRouter(): Router {
   const router = Router();
