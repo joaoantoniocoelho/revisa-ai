@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { X, Coins } from "lucide-react";
+import Link from "next/link";
+import { X, Coins, ShoppingCart } from "lucide-react";
 
 interface CreditsModalProps {
   isOpen: boolean;
@@ -56,12 +57,20 @@ export default function CreditsModal({
         </div>
         <div className="p-4 space-y-4">
           <p className="text-sm text-gray-700 leading-relaxed">{message}</p>
+          <Link
+            href="/billing"
+            onClick={onClose}
+            className="flex items-center justify-center gap-2 w-full py-2.5 bg-primary text-white text-sm font-medium rounded-card hover:bg-primary-hover transition-colors"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            Comprar créditos
+          </Link>
           <button
             type="button"
             onClick={onClose}
-            className="w-full py-2.5 bg-primary text-white text-sm font-medium rounded-card hover:bg-primary-hover transition-colors"
+            className="w-full py-2 text-sm text-muted hover:text-gray-700 transition-colors"
           >
-            Entendi
+            Agora não
           </button>
         </div>
       </div>

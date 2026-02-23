@@ -9,6 +9,7 @@ import {
   User as UserIcon,
   Coins,
   LogIn,
+  ShoppingCart,
 } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { useAuthModal } from "@/contexts/AuthModalContext";
@@ -86,15 +87,23 @@ export default function Header() {
 
             <div className="flex items-center gap-2 flex-shrink-0">
               {isAuthenticated ? (
-                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-card border border-border">
-                  <UserIcon className="w-4 h-4 text-muted" />
-                  <span className="text-sm font-medium text-gray-700 max-w-[100px] truncate">
-                    {user?.name?.split(" ")[0]}
-                  </span>
-                  <span className="text-xs text-muted flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-border">
-                    <Coins className="w-3.5 h-3.5 text-amber-500" />
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/billing"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium rounded-card hover:bg-amber-100 hover:border-amber-300 transition-colors"
+                    title="Comprar créditos"
+                  >
+                    <Coins className="w-4 h-4 text-amber-500" />
                     {credits}
-                  </span>
+                    <span className="text-amber-400">·</span>
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                  </Link>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-card border border-border">
+                    <UserIcon className="w-4 h-4 text-muted" />
+                    <span className="text-sm font-medium text-gray-700 max-w-[100px] truncate">
+                      {user?.name?.split(" ")[0]}
+                    </span>
+                  </div>
                 </div>
               ) : (
                 <button
@@ -128,10 +137,14 @@ export default function Header() {
           </Link>
           <div className="flex items-center gap-2">
             {isAuthenticated ? (
-              <span className="text-xs text-muted flex items-center gap-1 bg-gray-50 px-2 py-1.5 rounded border border-border">
+              <Link
+                href="/billing"
+                className="text-xs text-muted flex items-center gap-1 bg-gray-50 px-2 py-1.5 rounded border border-border hover:border-amber-400 hover:text-amber-600 transition-colors"
+                title="Comprar créditos"
+              >
                 <Coins className="w-3.5 h-3.5 text-amber-500" />
                 {credits} créditos
-              </span>
+              </Link>
             ) : (
               <button
                 type="button"
@@ -174,6 +187,17 @@ export default function Header() {
             >
               <LayoutDashboard className="w-5 h-5" />
               <span className="text-xs font-medium">Decks</span>
+            </Link>
+            <Link
+              href="/billing"
+              className={`flex flex-col items-center gap-1 px-4 py-2 rounded-card transition-colors ${
+                pathname === "/billing"
+                  ? "text-amber-600 bg-amber-50"
+                  : "text-muted"
+              }`}
+            >
+              <Coins className="w-5 h-5" />
+              <span className="text-xs font-medium">Créditos</span>
             </Link>
             <Link
               href="/account"
