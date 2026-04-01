@@ -15,6 +15,7 @@ import {
   Sparkles,
   ShoppingCart,
   CheckCircle,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -22,6 +23,7 @@ export default function AccountPage() {
   const { user, loading: authLoading, isAuthenticated, getCredits, refreshUser } = useUser();
   const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentFailed, setPaymentFailed] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Handle return from Stripe Checkout
@@ -41,15 +43,21 @@ export default function AccountPage() {
           clearInterval(pollingRef.current!);
           await refreshUser();
           setPaymentSuccess(true);
+        } else if (status === "failed") {
+          clearInterval(pollingRef.current!);
+          setPaymentFailed(true);
         }
       } catch {
         // silent — keeps polling
       }
     }, 2000);
 
-    // Stop after 60s to avoid polling forever
+    // Stop after 60s — if still unresolved, show neutral failure message
     setTimeout(() => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        setPaymentFailed(true);
+      }
     }, 60_000);
 
     return () => {
@@ -98,6 +106,15 @@ export default function AccountPage() {
               <CheckCircle className="w-5 h-5 shrink-0" />
               <p className="text-sm font-medium">
                 Pagamento confirmado! Seus créditos foram adicionados.
+              </p>
+            </div>
+          )}
+
+          {paymentFailed && (
+            <div className="flex items-center gap-3 p-4 rounded-card bg-red-50 border border-red-200 text-red-800">
+              <XCircle className="w-5 h-5 shrink-0" />
+              <p className="text-sm font-medium">
+                Não foi possível confirmar o pagamento. Se o valor foi cobrado, entre em contato com o suporte.
               </p>
             </div>
           )}
