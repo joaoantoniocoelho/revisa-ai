@@ -6,6 +6,7 @@ import { beforeEach, beforeAll, afterAll, describe, expect, it, vi } from 'vites
 import { PaymentModel } from '../../src/domains/payments/models/Payment.js';
 import { UserModel } from '../../src/domains/auth/models/User.js';
 import { CREDIT_PACKAGES } from '../../src/shared/config/creditPackages.js';
+import { DEFAULT_CREDITS_FOR_NEW_USER } from '../../src/shared/config/credits.js';
 
 // vi.hoisted ensures these are available before vi.mock factory executes
 const mockCheckoutCreate = vi.hoisted(() => vi.fn());
@@ -223,7 +224,7 @@ describe('POST /api/payments/webhook', () => {
 
     const user = await UserModel.findById(userId).lean();
     // DEFAULT_CREDITS_FOR_NEW_USER (10) + pro package credits (30) = 40
-    expect(user!.credits).toBe(10 + CREDIT_PACKAGES.pro.credits);
+    expect(user!.credits).toBe(DEFAULT_CREDITS_FOR_NEW_USER + CREDIT_PACKAGES.pro.credits);
   });
 
   it('returns 200 with no DB side effects for an unknown event type', async () => {
@@ -262,30 +263,23 @@ describe('POST /api/payments/webhook', () => {
       data: { object: { id: sessionId } },
     });
 
-    const body = Buffer.from(
-      JSON.stringify({
-        type: 'checkout.session.completed',
-        data: { object: { id: sessionId } },
-      })
-    );
-
     // First delivery
     await request(app)
       .post('/api/payments/webhook')
       .set('Content-Type', 'application/json')
       .set('stripe-signature', 'test-sig')
-      .send(body);
+      .send(makeWebhookBody(sessionId));
 
     // Duplicate delivery (Stripe can retry)
     await request(app)
       .post('/api/payments/webhook')
       .set('Content-Type', 'application/json')
       .set('stripe-signature', 'test-sig')
-      .send(body);
+      .send(makeWebhookBody(sessionId));
 
     const user = await UserModel.findById(userId).lean();
     // Credits added exactly once: 10 (default) + 10 (starter) = 20, NOT 30
-    expect(user!.credits).toBe(10 + CREDIT_PACKAGES.starter.credits);
+    expect(user!.credits).toBe(DEFAULT_CREDITS_FOR_NEW_USER + CREDIT_PACKAGES.starter.credits);
   });
 
   it('returns 400 for an invalid Stripe signature', async () => {
