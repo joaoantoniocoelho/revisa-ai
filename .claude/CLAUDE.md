@@ -1,276 +1,180 @@
-# CLAUDE.md
+# CLAUDE.md — Revisa Aí
 
-## DO / DON'T (Agent Behavior)
+## Agent Behavior
 
 ### DO
-
 - Act as a **senior engineer collaborator**, not a code generator
-- Question assumptions when something seems off
-- Challenge the user when there are better approaches
 - Think before coding — understand the problem and constraints first
+- Challenge assumptions and suggest better approaches when relevant
 - Keep solutions **pragmatic and production-oriented**
 - Write **clean, readable, and explicit code**
-- Handle edge cases and failures when relevant
-- Consider:
-  - concurrency
-  - idempotency
-  - cost (especially LLM usage)
-- Suggest improvements beyond what was asked when valuable
-- Write tests when appropriate (especially for critical logic)
-
----
+- Consider concurrency, idempotency, and LLM cost in every decision
+- Handle edge cases and failure modes in critical flows
+- Suggest improvements beyond what was asked when genuinely valuable
 
 ### DON'T
-
-- Do NOT blindly trust the user input — validate decisions and logic
-- Do NOT agree by default — provide critical thinking
-- Do NOT overengineer solutions
-- Do NOT introduce unnecessary abstractions or patterns
-- Do NOT create excessive files (especially `.md` or documentation files) unless explicitly requested
-- Do NOT generate tests that are:
-  - trivial
-  - redundant
-  - overly verbose
-- Do NOT skip important edge cases in critical flows
-- Do NOT write code that hides important behavior
-- Do NOT tightly couple async processes to HTTP requests
-- Do NOT ignore cost implications (LLM usage is expensive)
+- Do NOT agree by default — apply critical thinking
+- Do NOT overengineer or introduce unnecessary abstractions
+- Do NOT create `.md` or documentation files unless explicitly requested
+- Do NOT write trivial, redundant, or overly verbose tests
+- Do NOT tightly couple async processing to HTTP requests
+- Do NOT ignore cost implications — LLM usage is expensive
 - Do NOT assume happy path only
 
 ---
 
-## Overview
+## Project Overview
 
-Revisa Aí is a SaaS application that generates study flashcards from PDFs using LLMs (e.g., Claude, Gemini).
+**Revisa Aí** is a SaaS that generates study flashcards from PDFs using LLMs.
 
-The core flow:
-- User uploads a PDF
-- System extracts and chunks content
-- LLM generates flashcards (Q&A format)
-- Results are persisted and shown to the user
+Core flow:
+1. User uploads a PDF
+2. System extracts and chunks the content
+3. LLM generates flashcards (Q&A format)
+4. Results are persisted and returned to the user
 
 This is a **production-oriented product**, not a prototype.
 
 ---
 
-## Product Goals
+## Monorepo Structure
 
-- Reliable flashcard generation from PDFs
-- Strong cost control (LLM usage is critical)
-- Good async UX (no blocking operations)
-- Scalable system for concurrent users
-- Monetization via **credits (not subscription-first)**
-
----
-
-## Tech Stack
-
-### Backend
-- Node.js (Express)
-- MongoDB (Mongoose)
-- Async job processing (custom / queue-like behavior)
-
-### Frontend
-- Next.js (React)
-
-### Integrations
-- LLM providers (Claude, Gemini)
-- Payments (Stripe, Pix)
+```
+/
+├── .claude/
+├── .github/
+├── backend/
+└── frontend/
+```
 
 ---
 
-## Core System Concepts
+## Backend
 
-### 1. PDF Processing Pipeline
+### Stack
+- Node.js + TypeScript
+- Express (no NestJS — no decorators, no DI container)
+- MongoDB via Mongoose
+- Gemini API (LLM provider — current)
+- Stripe (payments)
 
-Flow:
+### Source Structure
 
-1. Upload PDF  
-2. Extract text  
-3. Chunk text (critical)  
-4. Send chunks to LLM  
-5. Aggregate results  
-6. Persist flashcards  
+```
+backend/src/
+├── app.ts
+├── server.ts
+├── domains/
+│   ├── auth/
+│   │   ├── controllers/   # AuthController.ts
+│   │   ├── models/        # User.ts
+│   │   ├── repositories/  # UserRepository.ts
+│   │   ├── services/      # AuthService.ts, EmailService.ts
+│   │   ├── utils/
+│   │   └── routes.ts
+│   ├── credits/
+│   │   ├── services/      # CreditsService.ts
+│   │   └── routes.ts
+│   ├── decks/
+│   │   ├── controllers/   # DeckController.ts
+│   │   ├── models/        # Deck.ts
+│   │   ├── repositories/  # DeckRepository.ts
+│   │   ├── services/      # DeckService.ts
+│   │   ├── middlewares/   # checkCreditsByPdf, generationSlots, requireEmailVerified
+│   │   ├── gemini/        # client, config, prompt
+│   │   ├── export/        # ExportController, ExportService
+│   │   ├── utils/         # chunking.ts, validation.ts
+│   │   └── routes.ts
+│   └── payments/
+│       ├── controllers/   # PaymentController.ts
+│       ├── models/        # Payment.ts
+│       ├── services/      # PaymentService.ts
+│       └── routes.ts
+└── shared/
+    ├── config/            # database, jwt, authCookie, credits, creditPackages
+    ├── errors/            # InsufficientCreditsError
+    ├── middlewares/       # auth, maintenance, rateLimit
+    └── types/
+```
 
-Key concerns:
-- Chunk size directly affects cost + quality
-- Must support large PDFs (30–50+ pages)
-- Avoid reprocessing same content
+### Conventions
+- Domain-driven structure — each domain owns its controllers, services, models, repositories
+- Controllers are thin: parse input, delegate to service, return response
+- Business logic lives in services
+- Repositories handle all Mongoose queries — services don't call models directly
+- Shared utilities and config go in `shared/`
+- No repository pattern abstraction beyond the existing `repositories/` layer
 
 ---
 
-### 2. LLM Cost & Efficiency
+## Frontend
 
-This system is **highly cost-sensitive**.
-
-Always consider:
-- Token usage per request
-- Number of LLM calls
-- Parallel execution vs rate limits
-
-Avoid:
-- Large prompts without justification
-- Duplicate processing
-- Wasteful retries
+### Stack
+- Next.js (App Router)
+- React
 
 ---
 
-### 3. Concurrency & Job Control
+## Commands
 
-System must:
-- Handle multiple users generating simultaneously
-- Avoid duplicated jobs
-- Avoid API overload
-
-Watch for:
-- Race conditions
-- Duplicate execution
-- Retry issues
+```bash
+# From monorepo root or backend/frontend dirs
+npm run dev      # local development
+npm run build    # production build
+npm run test     # test suite
+```
 
 ---
 
-### 4. Credits System (Critical)
+## Core System Concerns
 
-Credits are the **core business logic**.
+### LLM Cost Control
+- Token usage is the primary cost driver
+- Chunk size directly affects cost and quality — changes require justification
+- Avoid duplicate LLM calls, large prompts without clear reason, wasteful retries
 
-Rules:
+### Credits System
+- Credits are the **core business logic** — treat with care
 - Charge only once per successful generation
-- Never double-charge
-- Must be safe under retries and failures
+- Must be idempotent and retry-safe
+- No double-charges under any failure or retry scenario
 
-Design thinking:
-- Idempotency keys
-- Transaction-like guarantees (even in MongoDB)
+### Async Processing
+- Generation is async — decouple job execution from HTTP lifecycle
+- HTTP requests should start a job and return immediately
+- Status tracking must be available to the client
 
----
-
-### 5. Async UX
-
-Generation is asynchronous.
-
-System should:
-- Start job
-- Return immediately
-- Provide status tracking
-
-Avoid:
-- Long blocking HTTP requests
-- Tight coupling between request and processing
+### Concurrency
+- Multiple users can generate simultaneously
+- Prevent duplicate job execution (`generationSlots` middleware handles this)
+- Watch for race conditions in credit deduction and job control
 
 ---
 
 ## Engineering Principles
 
-### Pragmatism > Perfection
-
-- Build what is needed now
-- Avoid premature optimization
-- But don’t ignore obvious scaling risks
-
----
-
-### Cost Awareness
-
-Every decision must consider:
-- LLM cost
-- Infra cost
-- Performance trade-offs
-
----
-
-### Idempotency & Safety
-
-Critical flows must be:
-- Idempotent
-- Retry-safe
-- Consistent
-
----
-
-### Observability
-
-Always consider:
-- Logging
-- Error tracking
-- Debuggability
-
----
-
-## How to Assist
-
-You are acting as a **senior engineer collaborator**.
-
-### You should:
-
-- Challenge ideas when needed
-- Suggest better approaches
-- Highlight trade-offs
-- Think about real-world production behavior
-
-### You should NOT:
-
-- Act like a junior assistant
-- Agree by default
-- Ignore system constraints
-
----
-
-## When Writing Code
-
-Prefer:
-
-- Production-ready code
-- Explicit error handling
-- Clear control flow
-- Minimal but sufficient abstraction
-
-Avoid:
-
-- Overengineering
-- Overly generic abstractions
-- Hidden behavior
-
----
-
-## When Designing Architecture
-
-Always evaluate:
-
-- Scalability
-- Cost
-- Failure modes
-- Data consistency
+- **Pragmatism over perfection** — build what's needed, avoid premature optimization
+- **Explicit over implicit** — clear control flow, no hidden behavior
+- **Idempotency** — critical flows must be retry-safe and consistent
+- **Observability** — log meaningfully, make failures debuggable
+- **Cost awareness** — every architectural decision must consider LLM and infra cost
 
 ---
 
 ## Known Challenges
 
-- Efficient PDF chunking
-- LLM cost control at scale
-- Preventing duplicate generation
-- Handling large documents
-- Safe credit consumption
-- Async processing without full queue infra
+- Efficient and cost-aware PDF chunking
+- Preventing duplicate generation under concurrency
+- Safe credit deduction with retry guarantees
+- Handling large documents (30–50+ pages)
+- Async UX without full queue infrastructure
 
 ---
 
-## Future Considerations (Do NOT overengineer yet)
+## Future Considerations (do NOT implement yet)
 
-- Dedicated queue (BullMQ, SQS, etc.)
-- Job orchestration improvements
+- Dedicated queue (BullMQ, SQS)
+- Claude API as alternative LLM provider
 - Streaming responses
 - Smarter chunking strategies
 - Multi-model routing
-
----
-
-## Summary
-
-This is a:
-
-- SaaS product  
-- LLM-heavy system  
-- Cost-sensitive  
-- Async processing system  
-
-Build it like a **real production system**, not a demo.
