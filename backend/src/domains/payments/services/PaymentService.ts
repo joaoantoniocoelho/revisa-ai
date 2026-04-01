@@ -86,9 +86,17 @@ export class PaymentService {
       throw new Error('Invalid Stripe webhook signature');
     }
 
-    if (event.type !== 'checkout.session.completed') return;
-
     const session = event.data.object as Stripe.Checkout.Session;
+
+    if (event.type === 'checkout.session.expired') {
+      await PaymentModel.findOneAndUpdate(
+        { stripeCheckoutSessionId: session.id, status: 'pending' },
+        { $set: { status: 'failed' } }
+      );
+      return;
+    }
+
+    if (event.type !== 'checkout.session.completed') return;
 
     // Atomic idempotency guard — only processes once even under retries
     const payment = await PaymentModel.findOneAndUpdate(

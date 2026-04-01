@@ -227,6 +227,39 @@ describe('POST /api/payments/webhook', () => {
     expect(user!.credits).toBe(DEFAULT_CREDITS_FOR_NEW_USER + CREDIT_PACKAGES.pro.credits);
   });
 
+  it('marks payment as failed on checkout.session.expired', async () => {
+    const { userId } = await createAuthUser();
+    const sessionId = 'cs_webhook_expired';
+
+    await PaymentModel.create({
+      userId: new mongoose.Types.ObjectId(userId),
+      stripeCheckoutSessionId: sessionId,
+      packageId: 'starter',
+      credits: CREDIT_PACKAGES.starter.credits,
+      amountBrl: CREDIT_PACKAGES.starter.amountBrl,
+      status: 'pending',
+    });
+
+    mockConstructEvent.mockReturnValue({
+      type: 'checkout.session.expired',
+      data: { object: { id: sessionId } },
+    });
+
+    const res = await request(app)
+      .post('/api/payments/webhook')
+      .set('Content-Type', 'application/json')
+      .set('stripe-signature', 'test-sig')
+      .send(Buffer.from('{}'));
+
+    expect(res.status).toBe(200);
+
+    const payment = await PaymentModel.findOne({ stripeCheckoutSessionId: sessionId }).lean();
+    expect(payment!.status).toBe('failed');
+
+    const user = await UserModel.findById(userId).lean();
+    expect(user!.credits).toBe(DEFAULT_CREDITS_FOR_NEW_USER); // no credits added
+  });
+
   it('returns 200 with no DB side effects for an unknown event type', async () => {
     mockConstructEvent.mockReturnValue({
       type: 'payment_intent.created',
