@@ -5,6 +5,7 @@ import { createAuthRouter } from './domains/auth/routes.js';
 import { createDecksRouter } from './domains/decks/routes.js';
 import { createExportRouter } from './domains/decks/export/routes.js';
 import { createCreditsRouter } from './domains/credits/routes.js';
+import { createPaymentsRouter, createPaymentsWebhookRouter } from './domains/payments/routes.js';
 import { createMaintenanceModeMiddleware } from './shared/middlewares/maintenance.js';
 import { createInMemoryRateLimiter, ipKey } from './shared/middlewares/rateLimit.js';
 
@@ -34,6 +35,9 @@ export function createApp(): express.Express {
   if (shouldTrustProxy) {
     app.set('trust proxy', 1);
   }
+  // Webhook must be registered BEFORE express.json() to receive raw body
+  app.use('/api/payments/webhook', createPaymentsWebhookRouter());
+
   app.use(
     cors({
       origin(origin, callback) {
@@ -68,6 +72,7 @@ export function createApp(): express.Express {
   app.use('/api/decks', createDecksRouter());
   app.use('/api/export', createExportRouter());
   app.use('/api/credits', createCreditsRouter());
+  app.use('/api/payments', createPaymentsRouter());
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', message: 'Backend is running' });

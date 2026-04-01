@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/useToast";
 import ToastContainer from "@/components/ToastContainer";
 import { useCreditsModal } from "@/hooks/useCreditsModal";
 import CreditsModal from "@/components/CreditsModal";
+import BuyCreditsModal from "@/components/BuyCreditsModal";
 import { useAuthModal } from "@/contexts/AuthModalContext";
 import FlashcardViewer from "@/components/FlashcardViewer";
 import {
@@ -122,6 +123,7 @@ export default function Home() {
   const [creditsEstimate, setCreditsEstimate] = useState<CreditsEstimate | null>(null);
   const [estimateLoading, setEstimateLoading] = useState(false);
 
+  const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
   const {
     isOpen: isCreditsModalOpen,
@@ -407,7 +409,9 @@ export default function Home() {
         onClose={closeModal}
         title={modalTitle}
         message={modalMessage}
+        onBuyCredits={() => { closeModal(); setIsBuyModalOpen(true); }}
       />
+      <BuyCreditsModal isOpen={isBuyModalOpen} onClose={() => setIsBuyModalOpen(false)} />
       <Header />
       <main className="min-h-screen bg-gradient-to-b from-slate-50 via-surface to-slate-100/50 py-8 md:py-12 px-4 pb-28 md:pb-12">
         <div className="max-w-3xl mx-auto space-y-8 animate-fade-in-up">

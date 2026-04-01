@@ -8,6 +8,7 @@ interface CreditsModalProps {
   onClose: () => void;
   title: string;
   message: string;
+  onBuyCredits?: () => void;
 }
 
 export default function CreditsModal({
@@ -15,6 +16,7 @@ export default function CreditsModal({
   onClose,
   title,
   message,
+  onBuyCredits,
 }: CreditsModalProps) {
   useEffect(() => {
     if (isOpen) {
@@ -56,10 +58,23 @@ export default function CreditsModal({
         </div>
         <div className="p-4 space-y-4">
           <p className="text-sm text-gray-700 leading-relaxed">{message}</p>
+          {onBuyCredits && (
+            <button
+              type="button"
+              onClick={() => { onClose(); onBuyCredits(); }}
+              className="w-full py-2.5 bg-primary text-white text-sm font-medium rounded-card hover:bg-primary-hover transition-colors"
+            >
+              Comprar créditos
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
-            className="w-full py-2.5 bg-primary text-white text-sm font-medium rounded-card hover:bg-primary-hover transition-colors"
+            className={`w-full py-2.5 text-sm font-medium rounded-card transition-colors ${
+              onBuyCredits
+                ? "border border-border text-gray-700 hover:bg-gray-50"
+                : "bg-primary text-white hover:bg-primary-hover"
+            }`}
           >
             Entendi
           </button>
