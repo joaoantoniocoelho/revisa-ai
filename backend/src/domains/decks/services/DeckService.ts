@@ -11,6 +11,7 @@ import {
   validateCards,
   validatePdfText,
 } from '../utils/validation.js';
+import { logger } from '../../../shared/logger.js';
 
 const MAX_TEXT_LENGTH = 500_000;
 const MAX_CHUNKS_PER_PDF = 50;
@@ -116,6 +117,8 @@ export class DeckService {
     originalFilename: string,
     density: Density
   ): Promise<GenerateDeckResult> {
+    const generationStartMs = Date.now();
+
     const pdf = await import('pdf-parse');
     const data = await pdf.default(buffer);
     let text = (data.text as string).trim();
@@ -152,39 +155,93 @@ export class DeckService {
       );
     }
 
-    console.log(
-      `📄 PDF: ${(textLength / 1000).toFixed(1)}k characters | ${chunks.length} chunks (${chunkSize} chars/chunk)`
-    );
-    console.log(
-      `🎯 Target: ${targetCount} cards | ${cardsPerChunk} cards/chunk | Concurrency: ${maxConcurrent}`
+    logger.info(
+      {
+        event: 'deck_generation_started',
+        userId: userId.toString(),
+        originalFilename,
+        textLength,
+        pages: data.numpages,
+        chunks: chunks.length,
+      },
+      'deck_generation_started'
     );
 
     const allCards: FlashcardEntity[] = [];
+    let llmCallsCount = 0;
+    let tokensEstimatedInput = 0;
+    let tokensEstimatedOutput = 0;
+
     for (let i = 0; i < chunks.length; i += maxConcurrent) {
       const chunkBatch = chunks.slice(i, i + maxConcurrent);
+
+      logger.info(
+        {
+          event: 'llm_batch_started',
+          userId: userId.toString(),
+          batchIndex: Math.floor(i / maxConcurrent),
+          batchSize: chunkBatch.length,
+          totalChunks: chunks.length,
+        },
+        'llm_batch_started'
+      );
+
       const batchPromises = chunkBatch.map(async (chunk, index) => {
+        const chunkIndex = i + index;
+        const chunkNum = chunkIndex + 1;
+        const chunkStartMs = Date.now();
+
         try {
-          const chunkNum = i + index + 1;
-          console.log(`[${chunkNum}/${chunks.length}] Generating flashcards...`);
-          const cards = await generateFlashcards(chunk, density, cardsPerChunk);
-          console.log(`[${chunkNum}/${chunks.length}] ✓ ${cards.length} cards generated`);
-          return cards;
+          const result = await generateFlashcards(chunk, density, cardsPerChunk);
+          const durationMs = Date.now() - chunkStartMs;
+
+          llmCallsCount++;
+          tokensEstimatedInput += Math.ceil(chunk.length / 4);
+          tokensEstimatedOutput += Math.ceil(result.responseLength / 4);
+
+          logger.info(
+            {
+              event: 'llm_chunk_completed',
+              userId: userId.toString(),
+              chunkIndex: chunkNum,
+              totalChunks: chunks.length,
+              cardsGenerated: result.cards.length,
+              durationMs,
+            },
+            'llm_chunk_completed'
+          );
+
+          return result.cards;
         } catch (error) {
-          console.error(
-            `[${i + index + 1}/${chunks.length}] ✗ Error:`,
-            error instanceof Error ? error.message : error
+          logger.error(
+            {
+              event: 'llm_chunk_failed',
+              userId: userId.toString(),
+              chunkIndex: chunkNum,
+              totalChunks: chunks.length,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            'llm_chunk_failed'
           );
           return [];
         }
       });
+
       const batchResults = await Promise.all(batchPromises);
       allCards.push(...batchResults.flat());
     }
 
-    console.log(
-      `Total of ${allCards.length} cards generated from ${chunks.length} chunks`
-    );
     if (allCards.length === 0) {
+      const durationMs = Date.now() - generationStartMs;
+      logger.error(
+        {
+          event: 'deck_generation_failed',
+          userId: userId.toString(),
+          error: 'No flashcards generated',
+          durationMs,
+        },
+        'deck_generation_failed'
+      );
       throw new Error('Failed to generate any flashcards. Check your API key.');
     }
 
@@ -208,6 +265,27 @@ export class DeckService {
         finalCount: limitedCards.length,
       },
     });
+
+    const durationMs = Date.now() - generationStartMs;
+
+    logger.info(
+      {
+        event: 'deck_generation_completed',
+        userId: userId.toString(),
+        deckId: (deck as IDeckDoc)._id?.toString(),
+        chunks: chunks.length,
+        totalGenerated: allCards.length,
+        afterDeduplication: uniqueCards.length,
+        finalCount: limitedCards.length,
+        durationMs,
+        llmCallsCount,
+        tokensEstimatedInput,
+        tokensEstimatedOutput,
+        model: GEMINI_MODEL,
+        provider: 'gemini',
+      },
+      'deck_generation_completed'
+    );
 
     return {
       deck: deck as IDeckDoc,

@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GEMINI_CONFIG } from './config.js';
 import { buildFlashcardPrompt } from './prompt.js';
 import type { Density, FlashcardEntity } from '../../../shared/types/index.js';
+import { logger } from '../../../shared/logger.js';
 
 const LLM_TIMEOUT_MS = 60_000;
 
@@ -54,7 +55,7 @@ function tryParsePartialJson(text: string): { cards: PartialCard[] } {
   if (cards.length === 0) {
     throw new Error('Could not recover any flashcards. Please try again.');
   }
-  console.log(`Recovered ${cards.length} cards from partial JSON`);
+  logger.info({ event: 'llm_parse_recovered', cardsRecovered: cards.length }, 'llm_parse_recovered');
   return { cards };
 }
 
@@ -74,21 +75,35 @@ function cleanJsonResponse(text: string): string {
   return out;
 }
 
+export interface GenerateFlashcardsResult {
+  cards: FlashcardEntity[];
+  responseLength: number;
+}
+
 export async function generateFlashcards(
   text: string,
   density: Density,
   cardsPerChunk: number | null = null,
   retryCount = 0
-): Promise<FlashcardEntity[]> {
+): Promise<GenerateFlashcardsResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey?.trim()) {
     throw new Error('GEMINI_API_KEY is not configured on the server');
   }
 
+  const model = GEMINI_CONFIG.model;
+
+  logger.info(
+    { event: 'llm_request_started', model, chunkLength: text.length, retryCount },
+    'llm_request_started'
+  );
+
+  const startMs = Date.now();
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: GEMINI_CONFIG.model,
+    const geminiModel = genAI.getGenerativeModel({
+      model,
       generationConfig: {
         ...GEMINI_CONFIG.generationConfig,
         responseMimeType: 'application/json',
@@ -97,25 +112,31 @@ export async function generateFlashcards(
     const prompt = buildFlashcardPrompt(text, density, cardsPerChunk);
     const response = await withTimeout(
       (async () => {
-        const result = await model.generateContent(prompt);
+        const result = await geminiModel.generateContent(prompt);
         return result.response;
       })(),
       LLM_TIMEOUT_MS
     );
     let responseText = response.text();
+    const responseLength = responseText.length;
     responseText = cleanJsonResponse(responseText);
+
+    const durationMs = Date.now() - startMs;
+    logger.info(
+      { event: 'llm_request_completed', model, responseLength, durationMs },
+      'llm_request_completed'
+    );
 
     let parsed: { cards?: PartialCard[] };
     try {
       parsed = JSON.parse(responseText) as { cards?: PartialCard[] };
     } catch {
-      console.error('Response text:', responseText.substring(0, 500));
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
           parsed = JSON.parse(jsonMatch[0]) as { cards?: PartialCard[] };
         } catch {
-          console.log('Attempting to recover partial cards...');
+          logger.warn({ event: 'llm_retry', retryCount, reason: 'parse_failed' }, 'llm_retry');
           parsed = tryParsePartialJson(responseText);
         }
       } else {
@@ -135,14 +156,24 @@ export async function generateFlashcards(
         tags: card.tags?.map((tag) => cleanString(String(tag))).filter(Boolean) ?? [],
       }));
 
-    return cleanedCards;
+    return { cards: cleanedCards, responseLength };
   } catch (error: unknown) {
     const err = error as { message?: string; status?: number };
     if (err?.message?.includes('recover') && retryCount < 2) {
-      console.log(`Retry ${retryCount + 1}/2 to recover cards...`);
+      logger.warn(
+        { event: 'llm_retry', retryCount: retryCount + 1, reason: 'recover_attempt' },
+        'llm_retry'
+      );
       await new Promise((resolve) => setTimeout(resolve, 1000));
       return generateFlashcards(text, density, cardsPerChunk, retryCount + 1);
     }
+
+    const durationMs = Date.now() - startMs;
+    logger.error(
+      { event: 'llm_request_failed', model, error: err?.message, retryCount, durationMs },
+      'llm_request_failed'
+    );
+
     if (
       err?.message?.includes('API key not valid') ||
       err?.message?.includes('API_KEY_INVALID') ||
