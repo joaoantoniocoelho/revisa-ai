@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { logger } from '../logger.js';
 
 export const connectDB = async (): Promise<void> => {
   try {
@@ -11,7 +12,7 @@ export const connectDB = async (): Promise<void> => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`Error connecting to DB: ${message}`);
+    logger.fatal({ event: 'db_connection_failed', message }, 'db_connection_failed');
     process.exit(1);
   }
 };

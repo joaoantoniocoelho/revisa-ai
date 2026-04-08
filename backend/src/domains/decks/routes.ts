@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { Router } from 'express';
+import { logger } from '../../shared/logger.js';
 import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
@@ -125,7 +126,7 @@ export function createDecksRouter(): Router {
         });
         return;
       }
-      console.error('Deck route error:', error);
+      logger.error({ event: 'deck_route_error', err: error }, 'deck_route_error');
       res.status(500).json({
         error: error instanceof Error ? error.message : 'Internal server error',
       });
