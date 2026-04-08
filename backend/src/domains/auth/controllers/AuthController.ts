@@ -58,7 +58,6 @@ export class AuthController {
         user: result.user,
       });
     } catch (error) {
-      console.error('Signup error:', error);
       res.status(400).json({
         error: error instanceof Error ? error.message : 'Signup failed',
       });
@@ -86,7 +85,6 @@ export class AuthController {
         user: result.user,
       });
     } catch (error) {
-      console.error('Login error:', error);
       res.status(401).json({
         error: error instanceof Error ? error.message : 'Invalid credentials',
       });
@@ -111,7 +109,6 @@ export class AuthController {
         user: result.user,
       });
     } catch (error) {
-      console.error('Google login error:', error);
       res.status(401).json({
         error: error instanceof Error ? error.message : 'Google login failed',
       });
@@ -127,7 +124,6 @@ export class AuthController {
       const result = await this.authService.getProfile(req.user._id.toString());
       res.status(200).json({ user: result.user });
     } catch (error) {
-      console.error('Get profile error:', error);
       res.status(404).json({
         error: error instanceof Error ? error.message : 'User not found',
       });
@@ -140,8 +136,8 @@ export class AuthController {
     let status: 'success' | 'expired' = 'expired';
     try {
       status = (await this.authService.verifyEmail(token)).status;
-    } catch (error) {
-      console.error('Verify email error:', error);
+    } catch {
+      // unexpected error — status stays 'expired', redirect handles it
     }
     const origin = getSafeRedirectOrigin();
     res.redirect(302, `${origin}/email-verified?status=${status}`);
@@ -156,7 +152,6 @@ export class AuthController {
       await this.authService.resendVerificationEmail(req.user._id.toString());
       res.status(200).json({ message: 'Verification email sent' });
     } catch (error) {
-      console.error('Resend verification error:', error);
       const msg = error instanceof Error ? error.message : 'Failed to resend';
       const status = msg.includes('already verified') ? 400 : msg.includes('Aguarde') ? 429 : 500;
       res.status(status).json({ error: msg });

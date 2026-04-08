@@ -55,7 +55,7 @@ export class DeckController {
       const result = await this.deckService.getUserDecks(user._id, limit, skip);
       res.json(result);
     } catch (error) {
-      console.error('Error in getDecks:', error);
+      req.log?.error({ event: 'get_decks_failed', userId: req.user?._id.toString(), err: error }, 'get_decks_failed');
       res.status(500).json({
         error: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -73,7 +73,7 @@ export class DeckController {
       const deck = await this.deckService.getDeckById(deckId, user._id);
       res.json({ deck });
     } catch (error) {
-      console.error('Error in getDeck:', error);
+      req.log?.error({ event: 'get_deck_failed', userId: req.user?._id.toString(), deckId: req.params.deckId, err: error }, 'get_deck_failed');
       res.status(404).json({
         error:
           error instanceof Error
@@ -94,7 +94,7 @@ export class DeckController {
       await this.deckService.deleteDeck(deckId, user._id);
       res.json({ message: 'Deck deleted successfully' });
     } catch (error) {
-      console.error('Error in deleteDeck:', error);
+      req.log?.error({ event: 'delete_deck_failed', userId: req.user?._id.toString(), deckId: req.params.deckId, err: error }, 'delete_deck_failed');
       res.status(404).json({
         error:
           error instanceof Error
@@ -123,7 +123,7 @@ export class DeckController {
         deck,
       });
     } catch (error) {
-      console.error('Error in updateDeck:', error);
+      req.log?.error({ event: 'update_deck_failed', userId: req.user?._id.toString(), deckId: req.params.deckId, err: error }, 'update_deck_failed');
       const statusCode =
         error instanceof Error && error.message.includes('not found')
           ? 404
