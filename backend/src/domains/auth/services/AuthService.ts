@@ -143,6 +143,7 @@ export class AuthService {
     if (!user) {
       throw new Error('User not found');
     }
+    logger.info({ event: 'get_profile', userId }, 'get_profile');
     return this.buildAuthResult(user);
   }
 
@@ -156,6 +157,7 @@ export class AuthService {
       logger.info({ event: 'email_verified', userId: user._id.toString() }, 'email_verified');
       return { status: 'success' };
     }
+    logger.warn({ event: 'email_verification_expired' }, 'email_verification_expired');
     return { status: 'expired' };
   }
 
@@ -172,5 +174,6 @@ export class AuthService {
     await this.emailService
       .sendVerificationEmail({ to: user.email, name: user.name, verifyUrl })
       .catch((err) => logger.error({ event: 'email_verification_send_failed', userId, err }, 'email_verification_send_failed'));
+    logger.info({ event: 'email_verification_resent', userId }, 'email_verification_resent');
   }
 }

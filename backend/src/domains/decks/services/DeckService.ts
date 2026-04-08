@@ -48,7 +48,8 @@ export class DeckService {
     let buffer: Buffer;
     try {
       buffer = await fs.promises.readFile(pdfFile.path);
-    } catch {
+    } catch (err) {
+      logger.error({ event: 'pdf_read_failed', userId: userId.toString(), originalFilename: pdfFile.originalname, err }, 'pdf_read_failed');
       throw new Error('Failed to read PDF file');
     }
     try {
@@ -69,6 +70,7 @@ export class DeckService {
   ): Promise<GetUserDecksResult> {
     const decks = await this.deckRepository.findByUserId(userId, limit, skip);
     const total = await this.deckRepository.countByUserId(userId);
+    logger.info({ event: 'get_user_decks', userId: userId.toString(), total, limit, skip }, 'get_user_decks');
     return { decks, total, limit, skip };
   }
 
@@ -77,6 +79,7 @@ export class DeckService {
     if (!deck) {
       throw new Error('Deck not found');
     }
+    logger.info({ event: 'get_deck', userId: userId.toString(), deckId }, 'get_deck');
     return deck;
   }
 
@@ -85,6 +88,7 @@ export class DeckService {
     if (!deck) {
       throw new Error('Deck not found');
     }
+    logger.info({ event: 'deck_deleted', userId: userId.toString(), deckId }, 'deck_deleted');
     return deck;
   }
 
@@ -104,6 +108,7 @@ export class DeckService {
     if (!deck) {
       throw new Error('Deck not found');
     }
+    logger.info({ event: 'deck_renamed', userId: userId.toString(), deckId }, 'deck_renamed');
     return deck;
   }
 

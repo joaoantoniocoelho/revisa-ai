@@ -21,7 +21,9 @@ export class CreditsService {
     amount: number
   ): Promise<{ success: boolean }> {
     const result = await this.userRepository.tryDebitCredits(userId, amount);
-    if (!result.success) {
+    if (result.success) {
+      logger.info({ event: 'credits_debited', userId, amount }, 'credits_debited');
+    } else {
       logger.warn({ event: 'credits_insufficient', userId, amountRequired: amount }, 'credits_insufficient');
     }
     return result;
@@ -30,5 +32,6 @@ export class CreditsService {
   /** Refund credits on rollback. */
   async refundCredits(userId: string, amount: number): Promise<void> {
     await this.userRepository.refundCredits(userId, amount);
+    logger.info({ event: 'credits_refunded', userId, amount }, 'credits_refunded');
   }
 }

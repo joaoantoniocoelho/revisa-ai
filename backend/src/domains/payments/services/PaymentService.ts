@@ -135,6 +135,7 @@ export class PaymentService {
 
     if (!payment) return null;
 
+    logger.info({ event: 'get_payment_status', userId, sessionId, status: payment.status }, 'get_payment_status');
     return { status: payment.status };
   }
 }
