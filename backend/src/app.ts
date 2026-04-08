@@ -8,6 +8,8 @@ import { createCreditsRouter } from './domains/credits/routes.js';
 import { createPaymentsRouter, createPaymentsWebhookRouter } from './domains/payments/routes.js';
 import { createMaintenanceModeMiddleware } from './shared/middlewares/maintenance.js';
 import { createInMemoryRateLimiter, ipKey } from './shared/middlewares/rateLimit.js';
+import { requestLogger } from './shared/middlewares/requestLogger.js';
+import { logger } from './shared/logger.js';
 
 const DEFAULT_FRONTEND_URL = 'http://localhost:3000';
 
@@ -37,6 +39,8 @@ export function createApp(): express.Express {
   }
   // Webhook must be registered BEFORE express.json() to receive raw body
   app.use('/api/payments/webhook', createPaymentsWebhookRouter());
+
+  app.use(requestLogger);
 
   app.use(
     cors({
@@ -85,11 +89,18 @@ export function createApp(): express.Express {
   app.use(
     (
       err: Error,
-      _req: express.Request,
+      req: express.Request,
       res: express.Response,
       _next: express.NextFunction
     ) => {
-      console.error('Server error:', err);
+      logger.error({
+        requestId: req.requestId,
+        userId: req.user?._id,
+        route: req.path,
+        method: req.method,
+        error: err.message,
+        stack: err.stack,
+      });
       res.status(500).json({
         error: 'Internal server error',
         message: err.message,
