@@ -3,12 +3,10 @@ import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { PDFDocument } from 'pdf-lib';
 import {
-  CREDITS_PER_PAGE_BASE,
-  DENSITY_CREDIT_MULTIPLIER,
+  CREDIT_TIERS,
   getCreditsForGeneration,
   MIN_CREDITS_PER_GENERATION,
 } from '../../shared/config/credits.js';
-import type { Density } from '../../shared/types/index.js';
 
 const MAX_PDF_SIZE_MB = 10;
 const MAX_PDF_PAGES = 50;
@@ -27,23 +25,16 @@ export function createCreditsRouter(): Router {
     },
   });
 
-  function normalizeDensity(raw: unknown): Density {
-    const val = String(raw ?? 'medium').toLowerCase().trim();
-    if (val === 'low' || val === 'medium' || val === 'high') return val;
-    return 'medium';
-  }
-
   /** Public endpoint: returns pricing config for frontend display */
   router.get('/config', (_req, res) => {
     res.json({
-      creditsPerPageBase: CREDITS_PER_PAGE_BASE,
-      densityMultipliers: DENSITY_CREDIT_MULTIPLIER,
+      creditTiers: CREDIT_TIERS,
       minCreditsPerGeneration: MIN_CREDITS_PER_GENERATION,
       maxPdfPages: MAX_PDF_PAGES,
     });
   });
 
-  /** Public endpoint: estimate credits for a given PDF + density (without debit). */
+  /** Public endpoint: estimate credits for a given PDF (without debit). */
   router.post('/estimate', upload.single('pdf'), async (req, res) => {
     const file = req.file;
     if (!file?.buffer) {
@@ -52,7 +43,6 @@ export function createCreditsRouter(): Router {
     }
 
     try {
-      const density = normalizeDensity(req.body?.density);
       const pdf = await PDFDocument.load(file.buffer);
       const numPages = pdf.getPageCount() || 1;
       if (numPages > MAX_PDF_PAGES) {
@@ -61,9 +51,8 @@ export function createCreditsRouter(): Router {
         });
         return;
       }
-      const creditsRequired = getCreditsForGeneration(numPages, density);
+      const creditsRequired = getCreditsForGeneration(numPages);
       res.json({
-        density,
         numPages,
         creditsRequired,
       });

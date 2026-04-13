@@ -1,10 +1,12 @@
 import api from './api';
 
-type Density = 'low' | 'medium' | 'high';
+export interface CreditTier {
+  maxPages: number;
+  credits: number;
+}
 
 export interface CreditsConfig {
-  creditsPerPageBase: number;
-  densityMultipliers: Record<Density, number>;
+  creditTiers: CreditTier[];
   minCreditsPerGeneration: number;
   maxPdfPages: number;
 }
@@ -12,7 +14,6 @@ export interface CreditsConfig {
 let cachedConfig: CreditsConfig | null = null;
 
 export interface CreditsEstimate {
-  density: Density;
   numPages: number;
   creditsRequired: number;
 }
@@ -24,13 +25,9 @@ export async function fetchCreditsConfig(): Promise<CreditsConfig> {
   return cachedConfig!;
 }
 
-export async function fetchCreditsEstimate(
-  pdf: File,
-  density: Density
-): Promise<CreditsEstimate> {
+export async function fetchCreditsEstimate(pdf: File): Promise<CreditsEstimate> {
   const formData = new FormData();
   formData.append('pdf', pdf);
-  formData.append('density', density);
   const response = await api.post<CreditsEstimate>('/credits/estimate', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
