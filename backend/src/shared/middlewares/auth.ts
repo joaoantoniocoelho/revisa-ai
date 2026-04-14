@@ -2,6 +2,7 @@ import type { Response, NextFunction } from 'express';
 import type { Request } from 'express';
 import { UserRepository } from '../../domains/auth/repositories/UserRepository.js';
 import { verifyToken } from '../config/jwt.js';
+import { logger } from '../logger.js';
 
 export function createAuthenticate() {
   const userRepository = new UserRepository();
@@ -26,7 +27,7 @@ export function createAuthenticate() {
       req.user = user;
       next();
     } catch (error) {
-      console.error('Auth middleware error:', error);
+      logger.error({ event: 'auth_middleware_failed', err: error }, 'auth_middleware_failed');
       res.status(401).json({ error: 'Unauthorized' });
     }
   };
