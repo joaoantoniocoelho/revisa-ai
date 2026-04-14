@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { logger } from '../../../shared/logger.js';
 
 export interface SendVerificationEmailParams {
   to: string;
@@ -24,13 +25,13 @@ export class EmailService {
     const { to, name, verifyUrl } = params;
 
     if (!this.resendApiKey || !this.fromEmail) {
-      console.log('[EmailService] Verification email (stub) – RESEND_API_KEY or FROM_EMAIL not set');
+      logger.warn({ event: 'email_stub' }, 'email_stub: RESEND_API_KEY or FROM_EMAIL not set');
       return;
     }
 
     const normalizedVerifyUrl = typeof verifyUrl === 'string' ? verifyUrl.trim() : '';
     if (!normalizedVerifyUrl) {
-      console.warn('[EmailService] sendVerificationEmail: invalid verifyUrl');
+      logger.warn({ event: 'email_invalid_verify_url' }, 'email_invalid_verify_url');
       return;
     }
     let parsedVerifyUrl: URL;
@@ -43,7 +44,7 @@ export class EmailService {
         throw new Error('Invalid protocol');
       }
     } catch {
-      console.warn('[EmailService] sendVerificationEmail: invalid verifyUrl');
+      logger.warn({ event: 'email_invalid_verify_url' }, 'email_invalid_verify_url');
       return;
     }
     const finalVerifyUrl = parsedVerifyUrl.toString();
@@ -152,6 +153,6 @@ export class EmailService {
       throw new Error('No data returned from Resend');
     }
 
-    console.log('[EmailService] Verification email sent:', data.id ?? 'ok');
+    logger.info({ event: 'verification_email_sent', to, emailId: data.id }, 'verification_email_sent');
   }
 }

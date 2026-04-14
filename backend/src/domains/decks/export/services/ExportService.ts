@@ -1,6 +1,7 @@
 import type { Types } from 'mongoose';
 import type { FlashcardEntity } from '../../../../shared/types/index.js';
 import { DeckRepository } from '../../repositories/DeckRepository.js';
+import { logger } from '../../../../shared/logger.js';
 
 export interface ExportResult {
   buffer: Buffer;
@@ -48,13 +49,16 @@ export class ExportService {
     deckId: string,
     userId: Types.ObjectId
   ): Promise<ExportResult> {
+    logger.info({ event: 'deck_export_started', userId: userId.toString(), deckId }, 'deck_export_started');
     const deck = await this.deckRepository.findByIdAndUserId(deckId, userId);
     if (!deck) {
       throw new Error(
         'Deck not found or you do not have permission to access it'
       );
     }
-    return this.exportToAnki(deck.cards, deck.name);
+    const result = await this.exportToAnki(deck.cards, deck.name);
+    logger.info({ event: 'deck_export_completed', userId: userId.toString(), deckId, cardCount: deck.cards.length }, 'deck_export_completed');
+    return result;
   }
 
   private cleanText(text: string): string {

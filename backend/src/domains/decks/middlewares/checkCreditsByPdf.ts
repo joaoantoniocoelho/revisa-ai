@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { PDFDocument } from 'pdf-lib';
 import { CreditsService } from '../../credits/services/CreditsService.js';
 import { InsufficientCreditsError } from '../../../shared/errors/InsufficientCreditsError.js';
+import { logger } from '../../../shared/logger.js';
 
 const creditsService = new CreditsService();
 const MAX_PDF_PAGES = 50;
@@ -52,7 +53,7 @@ export function createCheckCreditsByPdf() {
         next(error);
         return;
       }
-      console.error('Check credits by PDF error:', error);
+      logger.error({ event: 'check_credits_by_pdf_failed', userId: req.user?._id.toString(), err: error }, 'check_credits_by_pdf_failed');
       res.status(500).json({ error: 'Error checking credits' });
     }
   };

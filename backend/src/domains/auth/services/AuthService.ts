@@ -7,6 +7,7 @@ import { CreditsService } from '../../credits/services/CreditsService.js';
 import { generateToken } from '../../../shared/config/jwt.js';
 import { toUserResponse } from '../utils/user.js';
 import { EmailService } from './EmailService.js';
+import { logger } from '../../../shared/logger.js';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const DEFAULT_BACKEND_URL = `http://localhost:${process.env.PORT ?? 3001}`;
@@ -20,7 +21,7 @@ function getBackendBaseUrl(): string {
     }
     return parsed.origin;
   } catch {
-    console.warn('[AuthService] Invalid BACKEND_URL, falling back to localhost');
+    logger.warn({ event: 'invalid_backend_url' }, 'invalid_backend_url');
     return DEFAULT_BACKEND_URL;
   }
 }
@@ -69,10 +70,11 @@ export class AuthService {
       verificationToken,
       verificationExpires
     );
+    logger.info({ event: 'user_signed_up', userId: user._id.toString(), email: user.email }, 'user_signed_up');
     const verifyUrl = `${this.backendBaseUrl}/api/auth/verify-email?token=${verificationToken}`;
     await this.emailService
       .sendVerificationEmail({ to: user.email, name: user.name, verifyUrl })
-      .catch((err) => console.error('[AuthService] sendVerificationEmail failed:', err));
+      .catch((err) => logger.error({ event: 'email_verification_send_failed', userId: user._id.toString(), err }, 'email_verification_send_failed'));
     const token = generateToken(user._id.toString());
     return this.buildAuthResult(user, { token });
   }
@@ -90,6 +92,7 @@ export class AuthService {
       throw new Error('Invalid credentials');
     }
     const token = generateToken(user._id.toString());
+    logger.info({ event: 'user_logged_in', userId: user._id.toString() }, 'user_logged_in');
     return this.buildAuthResult(user, { token });
   }
 
@@ -108,7 +111,9 @@ export class AuthService {
 
     let user = await this.userRepository.findByGoogleId(googleId!);
     if (user) {
-      const token = generateToken(user._id.toString());
+      const userId = user._id.toString();
+      const token = generateToken(userId);
+      logger.info({ event: 'google_login', userId, isNewUser: false }, 'google_login');
       return this.buildAuthResult(user, { token });
     }
 
@@ -116,7 +121,9 @@ export class AuthService {
     if (user) {
       const updated = await this.userRepository.updateGoogleId(user._id.toString(), googleId!);
       const target = updated ?? user;
-      const token = generateToken(target._id.toString());
+      const userId = target._id.toString();
+      const token = generateToken(userId);
+      logger.info({ event: 'google_login', userId, isNewUser: false }, 'google_login');
       return this.buildAuthResult(target, { token });
     }
 
@@ -125,7 +132,9 @@ export class AuthService {
       email,
       googleId: googleId!,
     });
-    const token = generateToken(user._id.toString());
+    const userId = user._id.toString();
+    const token = generateToken(userId);
+    logger.info({ event: 'google_login', userId, isNewUser: true }, 'google_login');
     return this.buildAuthResult(user, { token });
   }
 
@@ -134,6 +143,7 @@ export class AuthService {
     if (!user) {
       throw new Error('User not found');
     }
+    logger.info({ event: 'get_profile', userId }, 'get_profile');
     return this.buildAuthResult(user);
   }
 
@@ -144,8 +154,10 @@ export class AuthService {
 
     if (user && notExpired) {
       await this.userRepository.setEmailVerifiedAndClearToken(user._id.toString());
+      logger.info({ event: 'email_verified', userId: user._id.toString() }, 'email_verified');
       return { status: 'success' };
     }
+    logger.warn({ event: 'email_verification_expired' }, 'email_verification_expired');
     return { status: 'expired' };
   }
 
@@ -161,6 +173,7 @@ export class AuthService {
     const verifyUrl = `${this.backendBaseUrl}/api/auth/verify-email?token=${verificationToken}`;
     await this.emailService
       .sendVerificationEmail({ to: user.email, name: user.name, verifyUrl })
-      .catch((err) => console.error('[AuthService] sendVerificationEmail failed:', err));
+      .catch((err) => logger.error({ event: 'email_verification_send_failed', userId, err }, 'email_verification_send_failed'));
+    logger.info({ event: 'email_verification_resent', userId }, 'email_verification_resent');
   }
 }

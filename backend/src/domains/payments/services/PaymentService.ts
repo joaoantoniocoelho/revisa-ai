@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { CREDIT_PACKAGES, type PackageId } from '../../../shared/config/creditPackages.js';
 import { PaymentModel } from '../models/Payment.js';
 import { UserModel } from '../../auth/models/User.js';
+import { logger } from '../../../shared/logger.js';
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -72,6 +73,7 @@ export class PaymentService {
       status: 'pending',
     });
 
+    logger.info({ event: 'checkout_session_created', userId, packageId, sessionId: session.id, credits: pkg.credits }, 'checkout_session_created');
     return { checkoutUrl: session.url, sessionId: session.id };
   }
 
@@ -83,16 +85,19 @@ export class PaymentService {
     try {
       event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
     } catch {
+      logger.warn({ event: 'webhook_signature_invalid' }, 'webhook_signature_invalid');
       throw new Error('Invalid Stripe webhook signature');
     }
 
     const session = event.data.object as Stripe.Checkout.Session;
+    logger.info({ event: 'webhook_received', eventType: event.type, sessionId: session.id }, 'webhook_received');
 
     if (event.type === 'checkout.session.expired') {
       await PaymentModel.findOneAndUpdate(
         { stripeCheckoutSessionId: session.id, status: 'pending' },
         { $set: { status: 'failed' } }
       );
+      logger.info({ event: 'checkout_session_expired', sessionId: session.id }, 'checkout_session_expired');
       return;
     }
 
@@ -105,11 +110,15 @@ export class PaymentService {
       { new: true }
     );
 
-    if (!payment) return; // Already credited or not found — safe no-op
+    if (!payment) {
+      logger.info({ event: 'payment_already_credited', sessionId: session.id }, 'payment_already_credited');
+      return;
+    }
 
     await UserModel.findByIdAndUpdate(payment.userId, {
       $inc: { credits: payment.credits },
     });
+    logger.info({ event: 'credits_applied_from_payment', userId: payment.userId.toString(), sessionId: session.id, credits: payment.credits, packageId: payment.packageId }, 'credits_applied_from_payment');
   }
 
   async getPaymentStatus(
@@ -126,6 +135,7 @@ export class PaymentService {
 
     if (!payment) return null;
 
+    logger.info({ event: 'get_payment_status', userId, sessionId, status: payment.status }, 'get_payment_status');
     return { status: payment.status };
   }
 }

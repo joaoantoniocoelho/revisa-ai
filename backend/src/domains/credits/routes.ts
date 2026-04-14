@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
+import { logger } from '../../shared/logger.js';
 import multer from 'multer';
 import { PDFDocument } from 'pdf-lib';
 import {
@@ -57,7 +58,7 @@ export function createCreditsRouter(): Router {
         creditsRequired,
       });
     } catch (error) {
-      console.error('Credits estimate error:', error);
+      logger.error({ event: 'credits_estimate_failed', err: error }, 'credits_estimate_failed');
       res.status(400).json({ error: 'Invalid PDF file' });
     }
   });

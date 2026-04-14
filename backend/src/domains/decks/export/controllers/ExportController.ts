@@ -20,7 +20,7 @@ export class ExportController {
       );
       res.send(result.buffer);
     } catch (error) {
-      console.error('Export deck error:', error);
+      req.log?.error({ event: 'deck_export_failed', userId: req.user?._id.toString(), deckId: req.params.deckId, err: error }, 'deck_export_failed');
       res.status(500).json({
         error: `Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
