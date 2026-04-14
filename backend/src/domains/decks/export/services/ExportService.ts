@@ -22,13 +22,11 @@ export class ExportService {
     if (!cards?.length) {
       throw new Error('Cards array is required and must not be empty');
     }
-    const { default: mod } = await import('anki-apkg-export');
-    const AnkiExport = (mod as unknown as {
-      default: new (name: string) => {
-        addCard(front: string, back: string, options?: { tags?: string }): void;
-        save(): Promise<Buffer>;
-      };
-    }).default;
+    const mod = await import('anki-apkg-export');
+    const AnkiExport = (mod.default ?? mod) as unknown as new (name: string) => {
+      addCard(front: string, back: string, options?: { tags?: string }): void;
+      save(): Promise<Buffer>;
+    };
     const apkg = new AnkiExport(deckName);
 
     for (const card of cards) {
