@@ -146,7 +146,7 @@ export default function Home() {
     }
 
     setEstimateLoading(true);
-    fetchCreditsEstimate(pdfFile, density)
+    fetchCreditsEstimate(pdfFile)
       .then((estimate) => {
         if (!cancelled) setCreditsEstimate(estimate);
       })
@@ -160,7 +160,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [pdfFile, density]);
+  }, [pdfFile]);
 
   useEffect(() => {
     if (!loading) {
@@ -386,10 +386,19 @@ export default function Home() {
   };
 
   const CurrentStepIcon = loadingSteps[stepIndex]?.icon ?? Loader2;
-  const selectedMultiplier = creditsConfig?.densityMultipliers?.[density] ?? 1;
-  const estimatedPerPage = Math.ceil(
-    (creditsConfig?.creditsPerPageBase ?? 1) * selectedMultiplier
-  );
+
+  const tiersDescription = (() => {
+    const tiers = creditsConfig?.creditTiers;
+    if (!tiers || tiers.length === 0) return null;
+    let prevMax = 0;
+    const parts = tiers.map((tier) => {
+      const start = prevMax + 1;
+      const range = prevMax === 0 ? `até ${tier.maxPages} páginas` : `${start}–${tier.maxPages}`;
+      prevMax = tier.maxPages;
+      return `${range} = ${tier.credits} crédito${tier.credits !== 1 ? "s" : ""}`;
+    });
+    return parts.join(", ");
+  })();
 
   if (authLoading) {
     return (
@@ -466,11 +475,10 @@ export default function Home() {
                     Créditos disponíveis
                   </p>
                   <p className="text-xs text-muted mt-0.5">
-                    {credits} crédito{credits !== 1 ? "s" : ""}. Cada página do
-                    PDF consome a partir de{" "}
-                    {creditsConfig?.creditsPerPageBase ?? 1} crédito
-                    {(creditsConfig?.creditsPerPageBase ?? 1) !== 1 ? "s" : ""}{" "}
-                    (varia por densidade).
+                    {credits} crédito{credits !== 1 ? "s" : ""}.{" "}
+                    {tiersDescription
+                      ? `Cada geração custa conforme o tamanho do PDF: ${tiersDescription}.`
+                      : "O custo de cada geração depende do tamanho do PDF."}
                   </p>
                 </div>
                 <div className="text-2xl font-semibold text-gray-900 flex items-center gap-1">
@@ -558,13 +566,9 @@ export default function Home() {
                   );
                 })}
               </div>
-              {creditsConfig && (
-                <p className="text-xs text-muted mt-2">
-                  Custo estimado ({DENSITY_OPTIONS.find((d) => d.value === density)?.label}):{" "}
-                  {estimatedPerPage} crédito
-                  {estimatedPerPage !== 1 ? "s" : ""} por página.
-                </p>
-              )}
+              <p className="text-xs text-muted mt-2">
+                A densidade afeta apenas a quantidade de cartões, não o custo.
+              </p>
             </div>
 
             <div className="rounded-card border border-slate-200 bg-slate-50/80 px-3 py-2">

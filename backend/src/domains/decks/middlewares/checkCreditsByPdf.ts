@@ -3,7 +3,6 @@ import type { Request, Response, NextFunction } from 'express';
 import { PDFDocument } from 'pdf-lib';
 import { CreditsService } from '../../credits/services/CreditsService.js';
 import { InsufficientCreditsError } from '../../../shared/errors/InsufficientCreditsError.js';
-import type { Density } from '../../../shared/types/index.js';
 import { logger } from '../../../shared/logger.js';
 
 const creditsService = new CreditsService();
@@ -33,24 +32,14 @@ export function createCheckCreditsByPdf() {
         return;
       }
 
-      const requestedDensity =
-        ((req.body as { density?: string } | undefined)?.density ??
-          (req.query?.density as string | undefined) ??
-          'low')
-          .toLowerCase()
-          .trim() as Density;
-
-      const creditsRequired = creditsService.getCreditsForGeneration(
-        numPages,
-        requestedDensity
-      );
+      const creditsRequired = creditsService.getCreditsForGeneration(numPages);
       const userId = req.user!._id.toString();
       const { success } = await creditsService.tryDebitCredits(userId, creditsRequired);
 
       if (!success) {
         const creditsAvailable = await creditsService.getCredits(req.user!);
         throw new InsufficientCreditsError(
-          `This generation requires ${creditsRequired} credits (${numPages} page${numPages !== 1 ? 's' : ''}, density: ${requestedDensity}). You have ${creditsAvailable} credits.`,
+          `This generation requires ${creditsRequired} credits (${numPages} page${numPages !== 1 ? 's' : ''}). You have ${creditsAvailable} credits.`,
           creditsRequired,
           creditsAvailable
         );
